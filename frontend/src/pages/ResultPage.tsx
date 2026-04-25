@@ -682,15 +682,15 @@ export default function ResultPage() {
                             <div className="recommendation-list">
                                 <div className="recommendation-item">
                                     <div>
-                                        <strong>Safeguarding Lead (Yousef Abdelwahid)</strong>
-                                        <p>yousef.Abdelwahid@kentbusinesscollege.com</p>
+                                        <strong>Safeguarding Lead (Yousef Sultan & Tina Wright)</strong>
+                                        <p>safeguarding@kentbusinesscollege.com</p>
                                     </div>
                                 </div>
 
                                 <div className="recommendation-item">
                                     <div>
-                                        <strong>Wellbeing Support(Tina Wright)</strong>
-                                        <p>tina.wright@kentbusinesscollege.com</p>
+                                        <strong>Wellbeing Support (Nada Ibrahim & Alex Pennington)</strong>
+                                        <p>safeguarding@kentbusinesscollege.com</p>
                                     </div>
                                 </div>
 
@@ -1118,23 +1118,32 @@ export default function ResultPage() {
                                         <option value="low">Low</option>
                                         <option value="medium">Medium</option>
                                         <option value="high">High</option>
-                                        <option value="critical">Critical</option>
                                     </select>
                                 </div>
 
-                                <div>
-                                    <label>Preferred contact</label>
-                                    <select
-                                        value={ticketForm.preferred_contact}
-                                        onChange={(e) =>
-                                            updateTicketField("preferred_contact", e.target.value)
-                                        }
-                                    >
-                                        <option value="email">Email</option>
-                                        <option value="phone">Phone</option>
-                                        <option value="teams">Teams</option>
-                                    </select>
-                                </div>
+                                {ticketType === "safeguarding" ? (
+                                    <div>
+                                        <label>Contact</label>
+                                        <div className="ticket-contact-info">
+                                            <span className="ticket-contact-icon">✉</span>
+                                            <span>safeguarding@kentbusinesscollege.com</span>
+                                        </div>
+                                    </div>
+                                ) : (
+                                    <div>
+                                        <label>Preferred contact</label>
+                                        <select
+                                            value={ticketForm.preferred_contact}
+                                            onChange={(e) =>
+                                                updateTicketField("preferred_contact", e.target.value)
+                                            }
+                                        >
+                                            <option value="email">Email</option>
+                                            <option value="phone">Phone</option>
+                                            <option value="teams">Teams</option>
+                                        </select>
+                                    </div>
+                                )}
                             </div>
 
                             {ticketError && <p className="error">{ticketError}</p>}

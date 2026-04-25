@@ -26,7 +26,7 @@ load_dotenv(BASE_DIR / ".env")
 # SECURITY WARNING: keep the secret key used in production secret!
 SECRET_KEY = os.getenv("SECRET_KEY", "fallback-secret-key")
 DEBUG = os.getenv("DEBUG", "False") == "True"
-ALLOWED_HOSTS = ["*"]
+ALLOWED_HOSTS = os.getenv("ALLOWED_HOSTS", "localhost,127.0.0.1").split(",")
 
 # weBHOOK_URL = os.getenv("WEBHOOK_URL", "")
 WELLBEING_AUTOMATION_WEBHOOK_URL = "https://n8n.srv943390.hstgr.cloud/webhook/wellbeing_safegarden"
@@ -60,7 +60,16 @@ ROOT_URLCONF = 'core.urls'
 
 CORS_ALLOW_ALL_ORIGINS = True
 
-EMAIL_BACKEND = "django.core.mail.backends.console.EmailBackend"
+EMAIL_BACKEND = os.getenv(
+    "EMAIL_BACKEND",
+    "django.core.mail.backends.console.EmailBackend",
+)
+EMAIL_HOST = os.getenv("EMAIL_HOST", "")
+EMAIL_PORT = int(os.getenv("EMAIL_PORT", "587"))
+EMAIL_HOST_USER = os.getenv("EMAIL_HOST_USER", "")
+EMAIL_HOST_PASSWORD = os.getenv("EMAIL_HOST_PASSWORD", "")
+EMAIL_USE_TLS = os.getenv("EMAIL_USE_TLS", "True") == "True"
+DEFAULT_FROM_EMAIL = os.getenv("DEFAULT_FROM_EMAIL", "safeguarding@kentbusinesscollege.com")
 
 REST_FRAMEWORK = {
     "DEFAULT_RENDERER_CLASSES": [
@@ -89,10 +98,21 @@ WSGI_APPLICATION = 'core.wsgi.application'
 # Database
 # https://docs.djangoproject.com/en/6.0/ref/settings/#databases
 
+_DB_OPTIONS = {
+    "OPTIONS": {
+        "connect_timeout": 10,
+        "keepalives": 1,
+        "keepalives_idle": 60,
+        "keepalives_interval": 10,
+        "keepalives_count": 5,
+    },
+    "CONN_MAX_AGE": 60,
+}
+
 DATABASES = {
-    "default": dj_database_url.parse(os.getenv("DATABASE_URL")),
-    "wsms": dj_database_url.parse(os.getenv("DATABASE_URL_WSMS")),
-    "automation": dj_database_url.parse(os.getenv("DATABASE_URL_automation")),
+    "default": {**dj_database_url.parse(os.getenv("DATABASE_URL")), **_DB_OPTIONS},
+    "wsms": {**dj_database_url.parse(os.getenv("DATABASE_URL_WSMS")), **_DB_OPTIONS},
+    "automation": {**dj_database_url.parse(os.getenv("DATABASE_URL_automation")), **_DB_OPTIONS},
 }
 
 

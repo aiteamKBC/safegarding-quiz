@@ -1267,6 +1267,25 @@ button:disabled {
   color: var(--kent-success-text);
 }
 
+.ticket-contact-info {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 10px;
+  margin-bottom: 14px;
+  padding: 12px;
+  border-radius: 10px;
+  border: 1px solid var(--kent-border);
+  background: var(--kent-secondary-soft);
+  color: var(--kent-secondary);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.ticket-contact-icon {
+  font-size: 16px;
+}
+
 @media (max-width: 700px) {
   .ticket-form-grid {
     grid-template-columns: 1fr;

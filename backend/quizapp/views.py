@@ -137,7 +137,9 @@ def normalize_answer(question: SafeguardingQuestion, raw_answer):
     except (TypeError, ValueError):
         return None
 
-    if question.is_reverse_scored:
+    # is_reverse_scored=TRUE  → positive question  → keep score as-is
+    # is_reverse_scored=FALSE → negative question  → flip score
+    if not question.is_reverse_scored:
         return question.min_score + question.max_score - raw_value
 
     return raw_value
@@ -852,7 +854,7 @@ def send_result_to_employer_view(request, attempt_id):
             f"Risk Level: {record.risk_level or 'Low'}\n"
             f"Trigger Count: {record.trigger_count or 0}\n"
         ),
-        from_email="noreply@example.com",
+        from_email=settings.DEFAULT_FROM_EMAIL,
         recipient_list=[recipient],
         fail_silently=False,
     )
@@ -870,20 +872,29 @@ def automation_dashboard_view(request, attempt_id):
             status=status.HTTP_404_NOT_FOUND,
         )
 
+    empty_dashboard = {
+        "attempt_id": record.id,
+        "apprentice_dashboard": {
+            "ai_wellbeing_summary": "",
+            "summary": "",
+            "what_matters_now": [],
+            "resources_self_help": [],
+            "personalised_recommendations": [],
+        },
+        "follow_up_by_coach": {},
+        "suggested_coach_actions": {},
+        "message": "Automation dashboard not available.",
+    }
+
     try:
         automation_record = get_latest_automation_record(record.id)
     except Exception as exc:
-        logger.exception(
-            "Failed to fetch automation record for wellbeing record %s",
+        logger.warning(
+            "Could not fetch automation record for wellbeing record %s: %s",
             record.id,
+            exc,
         )
-        return Response(
-            {
-                "detail": "Failed to load automation dashboard.",
-                "error": str(exc),
-            },
-            status=status.HTTP_500_INTERNAL_SERVER_ERROR,
-        )
+        return Response(empty_dashboard)
 
     if not automation_record:
         return Response(
@@ -995,7 +1006,7 @@ def create_ticket_view(request):
                     f"Preferred Contact: {preferred_contact}\n\n"
                     f"Details:\n{details}"
                 ),
-                from_email="noreply@example.com",
+                from_email=settings.DEFAULT_FROM_EMAIL,
                 recipient_list=["safeguarding@kbc.ac.uk"],
                 fail_silently=True,
             )
@@ -1018,7 +1029,7 @@ def create_ticket_view(request):
                     f"Preferred Contact: {preferred_contact}\n\n"
                     f"Details:\n{details}"
                 ),
-                from_email="noreply@example.com",
+                from_email=settings.DEFAULT_FROM_EMAIL,
                 recipient_list=["wellbeing@kbc.ac.uk"],
                 fail_silently=True,
             )

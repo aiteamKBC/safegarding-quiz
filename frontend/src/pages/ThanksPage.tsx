@@ -24,7 +24,7 @@ export default function ThanksPage() {
             <div className="card">
                 <h1>Thanks for submitting your answers</h1>
                 <div className="actions">
-                    <button className="primary-btn" onClick={() => navigate(`/result/${attemptId}`)}>
+                    <button className="primary-btn" onClick={() => navigate(`/results/${attemptId}`)}>
                         View result
                     </button>
                     <button className="secondary-btn" onClick={handleSend}>
