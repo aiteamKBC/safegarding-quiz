@@ -188,7 +188,12 @@ export async function apiFetch<T>(
   const data = await response.json();
 
   if (!response.ok) {
-    throw new Error(data.detail || data.message || "Something went wrong");
+    const message: string = data.detail || data.message || "Something went wrong";
+    if (response.status === 401 || response.status === 403) {
+      clearToken();
+      window.location.href = "/";
+    }
+    throw new Error(message);
   }
 
   return data as T;

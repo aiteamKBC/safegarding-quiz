@@ -58,6 +58,7 @@ class MonitoringRecord(models.Model):
     submitted_at = models.DateTimeField(blank=True, null=True)
     completed = models.BooleanField(blank=True, null=True, default=False)
     history_json = models.JSONField(blank=True, null=True)
+    employer_notified_at = models.DateTimeField(blank=True, null=True)
 
     class Meta:
         managed = False

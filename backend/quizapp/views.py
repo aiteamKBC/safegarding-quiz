@@ -189,55 +189,57 @@ def detect_triggers(answer_rows, group_scores):
 
     code_map = {row.get("question_code"): row for row in answer_rows}
 
-    def raw(code):
+    def norm(code):
         item = code_map.get(code)
-        return item.get("raw_answer") if item else None
+        return item.get("normalized_score") if item else None
 
-    unsafe_now = raw("i_feel_unsafe_at_the_moment")
-    urgent_support = raw("i_need_urgent_support_right_now")
-    pressured = raw("i_feel_pressured_by_someone_to_do_things_i_do_not_want_to_do")
-    controlled = raw("someone_in_my_personal_life_makes_me_feel_controlled_or_afraid")
+    # normalized_score: higher = better (more positive/safe)
+    # triggers fire when normalized_score is LOW (poor wellbeing)
+    unsafe_now    = norm("i_feel_unsafe_at_the_moment")
+    urgent_support = norm("i_need_urgent_support_right_now")
+    pressured     = norm("i_feel_pressured_by_someone_to_do_things_i_do_not_want_to_do")
+    controlled    = norm("someone_in_my_personal_life_makes_me_feel_controlled_or_afraid")
 
     if unsafe_now is not None and unsafe_now <= 4:
         high.append("unsafe_now")
-    if urgent_support is not None and urgent_support >= 7:
+    if urgent_support is not None and urgent_support <= 3:
         high.append("urgent_support")
-    if pressured is not None and pressured >= 6:
+    if pressured is not None and pressured <= 4:
         high.append("pressured_by_someone")
-    if controlled is not None and controlled >= 6:
+    if controlled is not None and controlled <= 4:
         high.append("controlled_or_afraid")
 
     for row in answer_rows:
         code = row.get("question_code")
-        raw_answer = row.get("raw_answer")
+        score = row.get("normalized_score")
 
-        if raw_answer is None:
+        if score is None:
             continue
 
         if code in {
             "i_feel_anxious_or_worried_most_of_the_time",
             "i_struggle_to_control_my_worries",
             "my_anxiety_affects_my_ability_to_focus_or_perform",
-        } and raw_answer >= 7:
+        } and score <= 3:
             if "anxiety_high" not in medium:
                 medium.append("anxiety_high")
 
-        if code == "i_feel_low_or_down" and raw_answer >= 7:
+        if code == "i_feel_low_or_down" and score <= 3:
             if "low_mood" not in medium:
                 medium.append("low_mood")
 
         if code in {
             "i_struggle_to_get_good_quality_sleep",
             "i_feel_tired_or_exhausted_most_days",
-        } and raw_answer >= 7:
+        } and score <= 3:
             if "sleep_problems" not in medium:
                 medium.append("sleep_problems")
 
-        if code == "i_feel_lonely_or_isolated" and raw_answer >= 7:
+        if code == "i_feel_lonely_or_isolated" and score <= 3:
             if "loneliness" not in medium:
                 medium.append("loneliness")
 
-        if code == "i_am_considering_leaving_my_apprenticeship_programme" and raw_answer >= 6:
+        if code == "i_am_considering_leaving_my_apprenticeship_programme" and score <= 4:
             if "considering_leaving" not in medium:
                 medium.append("considering_leaving")
 
@@ -350,10 +352,16 @@ def transform_automation_payload(apprentice_dashboard, follow_up_by_coach, sugge
                 title = item.get("title") or item.get("text") or item.get("label")
                 if not title:
                     continue
+                bullet_points = item.get("bullet_points") or []
+                if not isinstance(bullet_points, list):
+                    bullet_points = []
                 resources_self_help.append(
                     {
                         "title": title,
                         "code": item.get("code") or "",
+                        "source_url": item.get("source_url") or "",
+                        "source_title": item.get("source_title") or "",
+                        "bullet_points": [b for b in bullet_points if isinstance(b, str) and b.strip()],
                     }
                 )
             elif isinstance(item, str) and item.strip():
@@ -361,6 +369,9 @@ def transform_automation_payload(apprentice_dashboard, follow_up_by_coach, sugge
                     {
                         "title": item.strip(),
                         "code": "",
+                        "source_url": "",
+                        "source_title": "",
+                        "bullet_points": [],
                     }
                 )
 
@@ -373,16 +384,25 @@ def transform_automation_payload(apprentice_dashboard, follow_up_by_coach, sugge
                         {
                             "title": item.strip(),
                             "code": "",
+                            "source_url": "",
+                            "source_title": "",
+                            "bullet_points": [],
                         }
                     )
                 elif isinstance(item, dict):
                     title = item.get("title") or item.get("text") or item.get("label")
                     if not title:
                         continue
+                    bullet_points = item.get("bullet_points") or []
+                    if not isinstance(bullet_points, list):
+                        bullet_points = []
                     resources_self_help.append(
                         {
                             "title": title,
                             "code": item.get("code") or "",
+                            "source_url": item.get("source_url") or "",
+                            "source_title": item.get("source_title") or "",
+                            "bullet_points": [b for b in bullet_points if isinstance(b, str) and b.strip()],
                         }
                     )
 
@@ -638,7 +658,7 @@ def submit_quiz_view(request):
             "mental": "Mental Health",
             "protective": "Protective Factors",
             "provider": "Provider Support",
-            "safeguarding": "Safeguarding Risk",
+            "safeguarding": "Safeguarding Safety",
             "overall": "Overall Score",
         },
         "risk_level": risk_level,
@@ -812,7 +832,7 @@ def result_view(request, attempt_id):
                 "mental": "Mental Health",
                 "protective": "Protective Factors",
                 "provider": "Provider Support",
-                "safeguarding": "Safeguarding Risk",
+                "safeguarding": "Safeguarding Safety",
                 "overall": "Overall Score",
             },
             "triggers": ensure_json_value(
@@ -931,6 +951,19 @@ def automation_dashboard_view(request, attempt_id):
     )
 
 # tickets
+@api_view(["POST"])
+def notify_employer_view(request, attempt_id):
+    record = get_record_from_request(request)
+
+    if record.id != attempt_id:
+        return Response({"detail": "Result not found."}, status=status.HTTP_404_NOT_FOUND)
+
+    record.employer_notified_at = timezone.now()
+    record.save(using="wsms", update_fields=["employer_notified_at"])
+
+    return Response({"message": "Employer notification recorded successfully."})
+
+
 @api_view(["POST"])
 def create_ticket_view(request):
     record = get_record_from_request(request)

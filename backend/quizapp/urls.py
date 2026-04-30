@@ -7,6 +7,7 @@ from .views import (
     submit_quiz_view,
     result_view,
     send_result_to_employer_view,
+    notify_employer_view,
     automation_dashboard_view,
     create_ticket_view,
 )
@@ -19,6 +20,7 @@ urlpatterns = [
     path("quiz/submit/", submit_quiz_view),
     path("quiz/results/<int:attempt_id>/", result_view),
     path("quiz/results/<int:attempt_id>/send-to-employer/", send_result_to_employer_view),
+    path("quiz/results/<int:attempt_id>/notify-employer/", notify_employer_view),
     path("quiz/results/<int:attempt_id>/automation-dashboard/", automation_dashboard_view),
     path("tickets/create/", create_ticket_view),
 ]
