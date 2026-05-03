@@ -173,14 +173,18 @@ export default function QuizPage() {
 
         {currentGroup && (
           <div className="survey-section">
-            {currentGroup.questions.map((q) => (
+            {(() => {
+              const offset = groupedQuestions
+                .slice(0, currentPage)
+                .reduce((sum, group) => sum + group.questions.length, 0);
+              return currentGroup.questions.map((q, idx) => (
               <div key={q.id} className="survey-question-card">
                 <div className="survey-chip">
                   {q.construct_type || currentGroup.categoryName}
                 </div>
 
                 <h3 className="survey-question-title">
-                  {q.order}. {q.text}
+                  {offset + idx + 1}. {q.text}
                 </h3>
 
                 <div className="survey-scale-row">
@@ -206,7 +210,8 @@ export default function QuizPage() {
                   <span>Strongly agree</span>
                 </div>
               </div>
-            ))}
+            ));
+            })()}
           </div>
         )}
 

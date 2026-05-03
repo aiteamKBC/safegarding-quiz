@@ -114,19 +114,45 @@ def serialize_question(q: SafeguardingQuestion):
         "trigger_rule": q.trigger_rule,
         "trigger_key": q.trigger_key,
         "trigger_priority": q.trigger_priority,
+        "trigger_note": q.trigger_note or "",
         "is_reverse_scored": q.is_reverse_scored,
         "is_core": q.is_core,
         "rotation_cycle": q.rotation_cycle,
     }
 
 
-def get_active_questions():
+def compute_rotation_cycle(record):
+    history = record.history_json or []
+    if not isinstance(history, list):
+        history = []
+    attempt_count = len(history)
+
+    cycles = sorted(set(
+        SafeguardingQuestion.objects.filter(
+            is_active=True, is_core=False, rotation_cycle__isnull=False
+        ).values_list("rotation_cycle", flat=True)
+    ))
+
+    if not cycles:
+        return CURRENT_ROTATION_CYCLE
+
+    return cycles[attempt_count % len(cycles)]
+
+
+def get_active_questions(rotation_cycle=CURRENT_ROTATION_CYCLE):
     return (
         SafeguardingQuestion.objects.filter(is_active=True)
         .filter(
             models.Q(is_core=True)
-            | models.Q(rotation_cycle=CURRENT_ROTATION_CYCLE)
+            | models.Q(rotation_cycle=rotation_cycle)
         )
+        .order_by("category_no", "question_order", "id")
+    )
+
+
+def get_all_active_questions():
+    return (
+        SafeguardingQuestion.objects.filter(is_active=True)
         .order_by("category_no", "question_order", "id")
     )
 
@@ -155,14 +181,27 @@ def calculate_group_averages(answer_rows):
 
     for row in answer_rows:
         score_group = row.get("score_group")
-        normalized_score = row.get("normalized_score")
 
-        if score_group in grouped and normalized_score is not None:
-            grouped[score_group].append(normalized_score)
+        if score_group == "safeguarding":
+            normalized_score = row.get("normalized_score")
+            if normalized_score is not None:
+                # Binary: normalized ≤ 8 = high risk (1), normalized 9-10 = low risk (10)
+                grouped["safeguarding"].append(1.0 if normalized_score <= 8 else 10.0)
+        elif score_group in grouped:
+            normalized_score = row.get("normalized_score")
+            if normalized_score is not None:
+                grouped[score_group].append(normalized_score)
 
     averages = {}
     for group_name, values in grouped.items():
-        averages[group_name] = round(sum(values) / len(values), 2) if values else 0.0
+        if not values:
+            averages[group_name] = 0.0
+        elif group_name == "safeguarding":
+            # If any answer was 1-8 → whole safeguarding score = 1 (High risk, no medium)
+            # Only if ALL answers were 9-10 → score = 10 (Low risk)
+            averages[group_name] = 10.0 if all(v == 10.0 for v in values) else 1.0
+        else:
+            averages[group_name] = round(sum(values) / len(values), 2)
 
     return averages
 
@@ -187,27 +226,26 @@ def detect_triggers(answer_rows, group_scores):
     medium = []
     pattern = []
 
-    code_map = {row.get("question_code"): row for row in answer_rows}
-
-    def norm(code):
-        item = code_map.get(code)
-        return item.get("normalized_score") if item else None
-
-    # normalized_score: higher = better (more positive/safe)
-    # triggers fire when normalized_score is LOW (poor wellbeing)
-    unsafe_now    = norm("i_feel_unsafe_at_the_moment")
-    urgent_support = norm("i_need_urgent_support_right_now")
-    pressured     = norm("i_feel_pressured_by_someone_to_do_things_i_do_not_want_to_do")
-    controlled    = norm("someone_in_my_personal_life_makes_me_feel_controlled_or_afraid")
-
-    if unsafe_now is not None and unsafe_now <= 4:
-        high.append("unsafe_now")
-    if urgent_support is not None and urgent_support <= 3:
-        high.append("urgent_support")
-    if pressured is not None and pressured <= 4:
-        high.append("pressured_by_someone")
-    if controlled is not None and controlled <= 4:
-        high.append("controlled_or_afraid")
+    # Safeguarding questions: normalized ≤ 8 = high risk (trigger), normalized 9-10 = safe
+    # Uses normalized_score so is_reverse_scored is respected (negative questions are handled correctly)
+    seen_keys = set()
+    for row in answer_rows:
+        if row.get("score_group") != "safeguarding":
+            continue
+        normalized = row.get("normalized_score")
+        if normalized is None:
+            continue
+        if normalized <= 8:
+            key = row.get("question_code") or f"safeguarding_{row.get('question_id', 'unknown')}"
+            if key not in seen_keys:
+                seen_keys.add(key)
+                high.append({
+                    "question_code": key,
+                    "question_text": row.get("question_text", ""),
+                    "question_id": row.get("question_id"),
+                    "trigger_note": row.get("trigger_note", ""),
+                    "normalized_score": normalized,
+                })
 
     for row in answer_rows:
         code = row.get("question_code")
@@ -547,7 +585,7 @@ def login_view(request):
 @api_view(["GET"])
 def instructions_view(request):
     record = get_record_from_request(request)
-    questions_count = get_active_questions().count()
+    questions_count = get_active_questions(compute_rotation_cycle(record)).count()
 
     return Response(
         {
@@ -584,9 +622,9 @@ def start_quiz_view(request):
 
 @api_view(["GET"])
 def questions_view(request):
-    get_record_from_request(request)
+    record = get_record_from_request(request)
 
-    questions = [serialize_question(q) for q in get_active_questions()]
+    questions = [serialize_question(q) for q in get_active_questions(compute_rotation_cycle(record))]
 
     return Response(
         {
@@ -602,7 +640,7 @@ def submit_quiz_view(request):
     submitted_answers = request.data.get("answers", [])
     submitted_at = timezone.now()
 
-    questions = {q.id: q for q in get_active_questions()}
+    questions = {q.id: q for q in get_all_active_questions()}
     answer_rows = []
 
     for item in submitted_answers:
@@ -636,6 +674,7 @@ def submit_quiz_view(request):
                 "is_trigger": question.is_trigger,
                 "trigger_key": question.trigger_key,
                 "trigger_priority": question.trigger_priority,
+                "trigger_note": question.trigger_note or "",
             }
         )
 
@@ -951,6 +990,8 @@ def automation_dashboard_view(request, attempt_id):
     )
 
 # tickets
+EMPLOYER_NOTIFY_WEBHOOK_URL = "https://n8n.srv943390.hstgr.cloud/webhook/cb4f0c50-e92c-418a-ad3e-c1b25f6c951e"
+
 @api_view(["POST"])
 def notify_employer_view(request, attempt_id):
     record = get_record_from_request(request)
@@ -960,6 +1001,20 @@ def notify_employer_view(request, attempt_id):
 
     record.employer_notified_at = timezone.now()
     record.save(using="wsms", update_fields=["employer_notified_at"])
+
+    try:
+        requests.get(
+            EMPLOYER_NOTIFY_WEBHOOK_URL,
+            params={
+                "attempt_id": record.id,
+                "learner_name": record.learner_name or "",
+                "learner_email": record.learner_email or "",
+                "employer_email": record.manager_email or record.coach_email or "",
+            },
+            timeout=10,
+        )
+    except Exception as exc:
+        logger.warning("Employer notification webhook failed: %s", exc)
 
     return Response({"message": "Employer notification recorded successfully."})
 

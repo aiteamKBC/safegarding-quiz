@@ -23,6 +23,7 @@ class SafeguardingQuestion(models.Model):
     rotation_cycle = models.IntegerField(blank=True, null=True)
     trigger_key = models.TextField(blank=True, null=True)
     trigger_priority = models.TextField(blank=True, null=True)
+    trigger_note = models.TextField(blank=True, null=True)
 
     class Meta:
         managed = False

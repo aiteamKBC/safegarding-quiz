@@ -171,7 +171,8 @@ export default function ResultPage() {
         setAnnounceError("");
         try {
             await apiFetch(`/quiz/results/${attemptId}/notify-employer/`, { method: "POST" });
-            setAnnounceDone(true);
+
+setAnnounceDone(true);
         } catch (err) {
             setAnnounceError(err instanceof Error ? err.message : "Failed to send notification");
         } finally {
