@@ -83,6 +83,7 @@ def send_to_automation_webhook(record, result_json):
         "submitted_at": record.submitted_at.isoformat() if record.submitted_at else None,
         "risk_level": record.risk_level or "Low",
         "trigger_count": int(record.trigger_count or 0),
+        "triggered_questions": record.triggered_questions or {"high": [], "medium": [], "pattern": []},
     }
 
     response = requests.post(
@@ -716,6 +717,7 @@ def submit_quiz_view(request):
     record.trigger_count = (
         len(triggers["high"]) + len(triggers["medium"]) + len(triggers["pattern"])
     )
+    record.triggered_questions = triggers
     record.risk_level = risk_level
     record.submitted_at = submitted_at
     record.completed = True
@@ -738,11 +740,60 @@ def submit_quiz_view(request):
             "category_3_score",
             "category_4_score",
             "trigger_count",
+            "triggered_questions",
             "risk_level",
             "submitted_at",
             "completed",
         ],
     )
+
+    # Auto-create ticket when triggers are detected
+    if triggers["high"]:
+        ticket_type = "safeguarding"
+        subject = f"[AUTO] Safeguarding concern flagged — {record.learner_name or record.learner_email}"
+    elif triggers["medium"] or triggers["pattern"]:
+        ticket_type = "wellbeing"
+        subject = f"[AUTO] Wellbeing concern flagged — {record.learner_name or record.learner_email}"
+    else:
+        ticket_type = None
+
+    if ticket_type:
+        high_qs = [
+            f"• {t.get('question_text', t.get('question_code', ''))} (score: {t.get('normalized_score', '')})"
+            for t in triggers["high"]
+        ]
+        medium_qs = [f"• {t}" for t in triggers["medium"]]
+        pattern_qs = [f"• {t}" for t in triggers["pattern"]]
+        triggered_lines = "\n".join(high_qs + medium_qs + pattern_qs)
+
+        details = (
+            f"Auto-generated ticket from wellbeing survey.\n\n"
+            f"Risk Level:    {risk_level}\n"
+            f"Total Score:   {overall_score}\n"
+            f"Trigger Count: {record.trigger_count}\n"
+            f"Programme:     {record.programme or '—'}\n"
+            f"Coach:         {record.coach_name or '—'}\n"
+        )
+        if triggered_lines:
+            details += f"\nTriggered Questions:\n{triggered_lines}"
+
+        try:
+            SupportTicket.objects.create(
+                wellbeing_record_id=record.id,
+                ticket_type=ticket_type,
+                created_by="System",
+                full_name=record.learner_name or "",
+                email=record.learner_email or "",
+                subject=subject,
+                details=details,
+                urgency=risk_level.lower(),
+                preferred_contact="email",
+                status="New",
+            )
+        except Exception:
+            logger.exception(
+                "Failed to auto-create ticket for record %s", record.id
+            )
 
     webhook_sent = False
     webhook_error = None
@@ -1024,8 +1075,9 @@ def create_ticket_view(request):
     record = get_record_from_request(request)
 
     ticket_type = normalize_text(request.data.get("ticket_type", ""))
-    full_name = (request.data.get("full_name") or "").strip()
-    email = (request.data.get("email") or "").strip()
+    # Use the authenticated record as the source of truth for learner identity
+    full_name = (record.learner_name or (request.data.get("full_name") or "")).strip()
+    email = (record.learner_email or (request.data.get("email") or "")).strip()
     subject = (request.data.get("subject") or "").strip()
     details = (request.data.get("details") or "").strip()
     urgency = normalize_text(request.data.get("urgency", "medium"))
@@ -1072,6 +1124,7 @@ def create_ticket_view(request):
     ticket = SupportTicket.objects.create(
         wellbeing_record_id=record.id,
         ticket_type=ticket_type,
+        created_by="learner",
         full_name=full_name,
         email=email,
         subject=subject,
@@ -1080,52 +1133,6 @@ def create_ticket_view(request):
         preferred_contact=preferred_contact,
         status="open",
     )
-
-    if ticket_type == "safeguarding":
-        try:
-            send_mail(
-                subject=f"New Safeguarding Ticket: {subject}",
-                message=(
-                    f"Ticket ID: {ticket.id}\n"
-                    f"Type: {ticket_type}\n"
-                    f"Name: {full_name}\n"
-                    f"Email: {email}\n"
-                    f"Urgency: {urgency}\n"
-                    f"Preferred Contact: {preferred_contact}\n\n"
-                    f"Details:\n{details}"
-                ),
-                from_email=settings.DEFAULT_FROM_EMAIL,
-                recipient_list=["safeguarding@kbc.ac.uk"],
-                fail_silently=True,
-            )
-        except Exception:
-            logger.exception(
-                "Failed to send safeguarding ticket email for ticket %s",
-                ticket.id,
-            )
-
-    if ticket_type == "wellbeing":
-        try:
-            send_mail(
-                subject=f"New Wellbeing Ticket: {subject}",
-                message=(
-                    f"Ticket ID: {ticket.id}\n"
-                    f"Type: {ticket_type}\n"
-                    f"Name: {full_name}\n"
-                    f"Email: {email}\n"
-                    f"Urgency: {urgency}\n"
-                    f"Preferred Contact: {preferred_contact}\n\n"
-                    f"Details:\n{details}"
-                ),
-                from_email=settings.DEFAULT_FROM_EMAIL,
-                recipient_list=["wellbeing@kbc.ac.uk"],
-                fail_silently=True,
-            )
-        except Exception:
-            logger.exception(
-                "Failed to send wellbeing ticket email for ticket %s",
-                ticket.id,
-            )
 
     return Response(
         {

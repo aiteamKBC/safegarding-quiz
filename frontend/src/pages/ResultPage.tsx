@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import {
     apiFetch,
@@ -8,7 +8,7 @@ import {
 } from "../api";
 
 const SECTION_TITLES: Record<string, string> = {
-    ai_wellbeing_summary: "AI Wellbeing Summary",
+    ai_wellbeing_summary: "Wellbeing Summary",
     what_matters_now: "What Matters Now",
     overall_wellbeing: "Overall Wellbeing",
     workplace_experience: "Workplace Experience",
@@ -130,19 +130,55 @@ export default function ResultPage() {
         preferred_contact: "email" as "email" | "phone" | "teams",
     });
 
+    const [automationLoading, setAutomationLoading] = useState(true);
+    const pollTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
     useEffect(() => {
         apiFetch<ResultResponse>(`/quiz/results/${attemptId}/`)
             .then(setResult)
             .catch((err: unknown) => {
                 setError(err instanceof Error ? err.message : "Failed to load result");
             });
-
-        apiFetch<AutomationDashboardResponse>(
-            `/quiz/results/${attemptId}/automation-dashboard/`
-        )
-            .then(setAutomationData)
-            .catch(() => setAutomationData(null));
     }, [attemptId]);
+
+    useEffect(() => {
+        if (!result) return;
+
+        let polls = 0;
+        const MAX_POLLS = 12;
+
+        const fetchAutomation = () => {
+            apiFetch<AutomationDashboardResponse>(
+                `/quiz/results/${attemptId}/automation-dashboard/`
+            )
+                .then((data) => {
+                    polls += 1;
+                    const dashboard = data.apprentice_dashboard;
+                    const hasContent =
+                        !data.message &&
+                        dashboard &&
+                        typeof dashboard === "object" &&
+                        Object.keys(dashboard).length > 0;
+
+                    if (hasContent || polls >= MAX_POLLS) {
+                        setAutomationData(data);
+                        setAutomationLoading(false);
+                    } else {
+                        pollTimerRef.current = setTimeout(fetchAutomation, 5000);
+                    }
+                })
+                .catch(() => {
+                    setAutomationData(null);
+                    setAutomationLoading(false);
+                });
+        };
+
+        fetchAutomation();
+
+        return () => {
+            if (pollTimerRef.current) clearTimeout(pollTimerRef.current);
+        };
+    }, [result, attemptId]);
 
     useEffect(() => {
         if (!result?.learner) return;
@@ -227,9 +263,73 @@ setAnnounceDone(true);
 
     if (!result) {
         return (
-            <div className="student-page"><div className="student-shell">
-                <div className="student-card"><p>Loading your results...</p></div>
-            </div></div>
+            <div className="student-page">
+                <div className="student-shell">
+
+                    {/* Header skeleton */}
+                    <div className="skeleton-card">
+                        <div className="skeleton-header-row">
+                            <div className="skeleton-bone skeleton-title" />
+                            <div className="skeleton-chip-row">
+                                <div className="skeleton-bone skeleton-btn" />
+                                <div className="skeleton-bone skeleton-btn" />
+                            </div>
+                        </div>
+                        <div className="skeleton-bone skeleton-line" />
+                        <div className="skeleton-bone skeleton-line-m" />
+                    </div>
+
+                    {/* Message skeleton */}
+                    <div className="skeleton-card">
+                        <div className="skeleton-bone skeleton-title" style={{ width: "45%" }} />
+                        <div className="skeleton-bone skeleton-line" />
+                        <div className="skeleton-bone skeleton-line" />
+                        <div className="skeleton-bone skeleton-line-m" />
+                    </div>
+
+                    {/* AI summary skeleton */}
+                    <div className="skeleton-card">
+                        <div className="skeleton-section-header">
+                            <div className="skeleton-bone skeleton-icon" />
+                            <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 8 }}>
+                                <div className="skeleton-bone skeleton-title" style={{ width: "40%" }} />
+                                <div className="skeleton-bone skeleton-sub" />
+                            </div>
+                        </div>
+                        <div className="skeleton-bone skeleton-line" />
+                        <div className="skeleton-bone skeleton-line-m" />
+                        <div className="skeleton-bone skeleton-line-s" />
+                    </div>
+
+                    {/* Recommendations skeleton */}
+                    <div className="skeleton-card">
+                        <div className="skeleton-section-header">
+                            <div className="skeleton-bone skeleton-icon" />
+                            <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 8 }}>
+                                <div className="skeleton-bone skeleton-title" style={{ width: "50%" }} />
+                                <div className="skeleton-bone skeleton-sub" />
+                            </div>
+                        </div>
+                        <div className="skeleton-bone skeleton-line" />
+                        <div className="skeleton-bone skeleton-line" />
+                        <div className="skeleton-bone skeleton-line-m" />
+                    </div>
+
+                    {/* Resources skeleton */}
+                    <div className="skeleton-card">
+                        <div className="skeleton-section-header">
+                            <div className="skeleton-bone skeleton-icon" />
+                            <div className="skeleton-bone skeleton-title" style={{ width: "35%" }} />
+                        </div>
+                        <div className="skeleton-chip-row">
+                            {[130, 100, 150, 110, 90].map((w, i) => (
+                                <div key={i} className="skeleton-bone skeleton-chip" style={{ width: w }} />
+                            ))}
+                        </div>
+                    </div>
+
+                </div>
+            </div>
         );
     }
 
@@ -372,8 +472,20 @@ setAnnounceDone(true);
                     </p>
                 </div>
 
+                {/* AI sections loading state */}
+                {automationLoading && (
+                    <div className="skeleton-card" style={{ alignItems: "center", flexDirection: "row", gap: 16 }}>
+                        <div className="skeleton-bone skeleton-icon" style={{ flexShrink: 0 }} />
+                        <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 10 }}>
+                            <div className="skeleton-bone skeleton-title" style={{ width: "50%" }} />
+                            <div className="skeleton-bone skeleton-line" />
+                            <div className="skeleton-bone skeleton-line-m" />
+                        </div>
+                    </div>
+                )}
+
                 {/* ai_wellbeing_summary */}
-                {hasAiSummary && (
+                {!automationLoading && hasAiSummary && (
                     <div className="student-card">
                         <div className="section-header">
                             <span className="section-icon">{SECTION_ICONS.ai_wellbeing_summary}</span>
@@ -404,7 +516,7 @@ setAnnounceDone(true);
                 )}
 
                 {/* what_matters_now */}
-                {what_matters_now.length > 0 && (
+                {!automationLoading && what_matters_now.length > 0 && (
                     <div className="student-card">
                         <div className="section-header">
                             <span className="section-icon">{SECTION_ICONS.what_matters_now}</span>
@@ -428,7 +540,7 @@ setAnnounceDone(true);
                 )}
 
                 {/* overall_wellbeing / workplace_experience / support_from_kbc */}
-                {rawDetailSections.map((sec) => (
+                {!automationLoading && rawDetailSections.map((sec) => (
                     <div className="student-card" key={sec.key}>
                         <div className="section-header">
                             <span className="section-icon">{SECTION_ICONS[sec.key] ?? "📋"}</span>
@@ -466,7 +578,7 @@ setAnnounceDone(true);
                 ))}
 
                 {/* personalised_recommendations */}
-                {personalised_recommendations.length > 0 && (
+                {!automationLoading && personalised_recommendations.length > 0 && (
                     <div className="student-card">
                         <div className="section-header">
                             <span className="section-icon">{SECTION_ICONS.personalised_recommendations}</span>
@@ -513,7 +625,7 @@ setAnnounceDone(true);
                 )}
 
                 {/* resources_self_help */}
-                {resources_self_help.length > 0 && (
+                {!automationLoading && resources_self_help.length > 0 && (
                     <div className="student-card">
                         <div className="section-header">
                             <span className="section-icon">{SECTION_ICONS.resources_self_help}</span>
@@ -827,7 +939,9 @@ setAnnounceDone(true);
                                         <option value="low">Low</option>
                                         <option value="medium">Medium</option>
                                         <option value="high">High</option>
-                                        <option value="critical">Critical</option>
+                                        {ticketType === "safeguarding" && (
+                                            <option value="critical">Critical</option>
+                                        )}
                                     </select>
                                 </div>
                                 {ticketType === "safeguarding" ? (
