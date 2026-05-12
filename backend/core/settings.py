@@ -28,6 +28,8 @@ SECRET_KEY = os.getenv("SECRET_KEY", "fallback-secret-key")
 DEBUG = os.getenv("DEBUG", "False") == "True"
 ALLOWED_HOSTS = os.getenv("ALLOWED_HOSTS", "localhost,127.0.0.1").split(",")
 
+TASKS_API_KEY = os.getenv("TASKS_API_KEY", "")
+
 # weBHOOK_URL = os.getenv("WEBHOOK_URL", "")
 WELLBEING_AUTOMATION_WEBHOOK_URL = "https://n8n.srv943390.hstgr.cloud/webhook/wellbeing_safegarden"
 
@@ -151,3 +153,6 @@ USE_TZ = True
 # https://docs.djangoproject.com/en/6.0/howto/static-files/
 
 STATIC_URL = 'static/'
+
+MEDIA_URL = '/media/'
+MEDIA_ROOT = BASE_DIR / 'media'

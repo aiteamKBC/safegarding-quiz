@@ -12,6 +12,8 @@
 6. [Database Schema](#6-database-schema)
 7. [API Reference](#7-api-reference)
 8. [Integrations](#8-integrations)
+9. [Frontend UI Components](#9-frontend-ui-components)
+10. [Changelog](#10-changelog)
 
 ---
 
@@ -162,8 +164,8 @@ flowchart TD
     I --> J[trigger_count saved\nto DB]
 
     J --> K{Any triggers?}
-    K -->|HIGH| L[🎫 Safeguarding Ticket\nurgency = high risk level\nsource = System\ncreated_by = Automatic\nstatus = New]
-    K -->|MEDIUM / PATTERN| M[🎫 Wellbeing Ticket\nurgency = risk level\nsource = System\ncreated_by = Automatic\nstatus = New]
+    K -->|HIGH| L[🎫 Safeguarding Ticket\nurgency = high risk level\ncreated_by = System\nstatus = New]
+    K -->|MEDIUM / PATTERN| M[🎫 Wellbeing Ticket\nurgency = risk level\ncreated_by = System\nstatus = New]
     K -->|None| N[No ticket created]
 
     L & M --> O[Ticket visible\nin Ticket System]
@@ -208,7 +210,6 @@ erDiagram
         bigint wellbeing_record_id FK
         text ticket_type
         text created_by
-        text source
         text full_name
         text email
         text subject
@@ -317,10 +318,10 @@ Triggered on every quiz submission. Payload includes:
 ```
 
 ### Ticket Sources
-| `created_by` | `source` | Description |
-|---|---|---|
-| `Automatic` | `System` | Created by scoring engine when triggers detected |
-| `learner` | _(null)_ | Created manually by learner via Results page |
+| `created_by` | Description |
+|---|---|
+| `System` | Auto-created by scoring engine when triggers are detected on quiz submission |
+| `learner` | Manually submitted by the learner via the Results page support form |
 
 ### Score Group Weights
 | Group | Weight | Trigger Logic |
@@ -329,3 +330,78 @@ Triggered on every quiz submission. Payload includes:
 | Protective Factors | 20% | Average of normalized scores |
 | Provider Support | 20% | Average of normalized scores |
 | Safeguarding | 20% | Binary: any score ≤ 8 → 1.0, all > 8 → 10.0 |
+
+---
+
+## 9. Frontend UI Components
+
+### Results Page — Wellbeing Summary Status Cards
+
+The AI Wellbeing Summary section displays status cards for each assessed domain. Each card uses a colour-coded style based on the label returned from the AI:
+
+| Label | Icon | CSS Class | Colour |
+|---|---|---|---|
+| `Improving` | `↑` | `status-improving` | Green (`#eef8f1`) |
+| `Watch` | `◎` | `status-watch` | Amber (`#fff6e8`) |
+| `Next step` | `→` | `status-next` | Lavender (`#f9f5ff`) |
+| `Observation` | `◉` | `status-observation` | Blue (`#e8f4fd`) |
+
+Labels are mapped in `STATUS_LABEL_MAP` in `frontend/src/pages/ResultPage.tsx`. Any unrecognised label falls back to `status-next`.
+
+---
+
+### Results Page — Skeleton Loader
+
+While the AI automation dashboard data is being fetched (polling every 5 seconds, up to 60 seconds), a shimmer skeleton animation is shown in place of each AI section card.
+
+- **CSS classes**: `.skeleton-bone`, `.skeleton-card`
+- **Animation**: `@keyframes skeleton-shimmer` — horizontal gradient sweep
+- Skeleton is replaced by real content as soon as polling returns a non-empty dashboard response
+
+---
+
+### Results Page — Safeguarding Referral Form
+
+A full Safeguarding Referral Form is available to staff via the **"Submit Safeguarding Referral"** button on the Results page. The form follows the KBC SR-001 structure and is presented as a modal.
+
+#### Form Structure (7 Parts)
+
+| Part | Title | Fields |
+|---|---|---|
+| 1 | Referrer Details | Name, job title, phone, email, date, relationship to learner |
+| 2 | Learner Details | Full name, DOB, gender, phone, email, address, apprenticeship programme |
+| 3 | Concern Details | Category (abuse / neglect / self-harm / domestic violence / radicalisation / other), description, date/time of concern, immediate risk toggle |
+| 4 | Risk Indicators | 12 checkboxes — physical signs, behaviour change, self-harm, domestic violence, substance misuse, safeguarding history, mental health crisis, financial exploitation, online risk, radicalisation, missing episodes, not engaging with support |
+| 5 | Actions Taken | Actions taken so far, who else was informed |
+| 6 | Consent | Whether learner was informed, reason if not, parental awareness (if under 18) |
+| 7 | Declaration | Signature field and confirmation of accuracy |
+
+On submit, the form builds a structured plain-text `details` string and POSTs to `POST /api/tickets/create/` with `ticket_type = "safeguarding"` and `created_by = "learner"`.
+
+---
+
+### Login Page — KBC Branding
+
+- KBC logo (`/kbc-logo.png`) is displayed centred above the login form using `.login-logo-wrap` / `.login-logo`
+- The same logo is used as the browser tab favicon via `<link rel="icon" href="/kbc-logo.png">` in `frontend/index.html`
+- Logo file must be placed at `frontend/public/kbc-logo.png`
+
+---
+
+## 10. Changelog
+
+### v2.8 — UI & Referral Form (2026-05)
+- Added **Safeguarding Referral Form** (7-part modal, KBC SR-001 structure) to Results page
+- Added **Observation** status card with blue colour scheme to Wellbeing Summary
+- Added **skeleton loader** shimmer animation while AI dashboard polls
+- Added **KBC logo** to Login page and as browser favicon
+- Fixed polling logic: switched from timestamp comparison to content-based check (`Object.keys(dashboard).length > 0`) to prevent stale data on page refresh
+
+### v2.5 — Auto-Ticketing & Triggered Questions (2026-04)
+- Added `triggered_questions` JSONField to `wellbeing_safeguarding_monitoring_system` table
+- Auto-ticket creation in `submit_quiz_view` when `trigger_count > 0`
+- Ticket `details` includes structured breakdown: risk level, total score, trigger count, programme, coach, and per-question triggered scores
+- Removed `source` column from `support_tickets`; origin is now identified by `created_by` (`System` vs `learner`)
+- Risk level stored in `urgency` column of `support_tickets` (removed separate `risk_level` column)
+- `triggered_questions` payload included in n8n automation webhook
+- Removed email sending from manual ticket creation — DB storage only

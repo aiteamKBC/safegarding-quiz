@@ -162,6 +162,19 @@ button:disabled {
   color: var(--kent-text);
 }
 
+.login-logo-wrap {
+  display: flex;
+  justify-content: center;
+  margin-bottom: 24px;
+}
+
+.login-logo {
+  width: 110px;
+  height: 110px;
+  object-fit: contain;
+  object-position: center;
+}
+
 .actions {
   display: flex;
   gap: 12px;
@@ -661,6 +674,180 @@ button:disabled {
 
 .safeguarding-btn:hover {
   background: var(--kent-secondary-hover);
+}
+
+.referral-btn {
+  width: 100%;
+  background: #7a1f2e;
+  color: #fff;
+  border: none;
+  border-radius: 12px;
+  padding: 12px 18px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  margin-top: 4px;
+}
+.referral-btn:hover { background: #5e1522; }
+
+/* ── Referral Modal ── */
+.referral-modal {
+  background: var(--kent-surface);
+  border-radius: 18px;
+  width: 100%;
+  max-width: 780px;
+  max-height: 92vh;
+  overflow-y: auto;
+  padding: 32px;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.18);
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.referral-modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+  padding-bottom: 20px;
+  border-bottom: 3px solid #7a1f2e;
+  margin-bottom: 24px;
+}
+
+.referral-modal-header h2 {
+  margin: 4px 0 6px;
+  font-size: 20px;
+  color: #7a1f2e;
+  font-weight: 700;
+}
+
+.referral-ref-num {
+  font-size: 11px;
+  color: var(--kent-muted);
+  margin: 0 0 4px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.referral-subtitle {
+  font-size: 13px;
+  color: var(--kent-muted);
+  margin: 0;
+  line-height: 1.5;
+}
+
+.referral-part {
+  margin-bottom: 24px;
+  padding-bottom: 24px;
+  border-bottom: 1px solid var(--kent-border);
+}
+.referral-part:last-of-type { border-bottom: none; }
+
+.referral-part-title {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--kent-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin: 0 0 14px;
+}
+.referral-part-title span {
+  color: #b8860b;
+  font-weight: 700;
+}
+
+.referral-grid-2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.referral-grid-4 {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+  margin-top: 12px;
+}
+
+.referral-field {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.referral-field-full { grid-column: 1 / -1; }
+
+.referral-field label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--kent-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.referral-field input,
+.referral-field textarea,
+.referral-field select {
+  border: 1px solid var(--kent-border);
+  border-radius: 8px;
+  padding: 9px 12px;
+  font-size: 14px;
+  color: var(--kent-text);
+  background: var(--kent-surface);
+  width: 100%;
+  box-sizing: border-box;
+  font-family: inherit;
+}
+
+.referral-field input:focus,
+.referral-field textarea:focus {
+  outline: none;
+  border-color: #b8860b;
+  box-shadow: 0 0 0 3px rgba(184,134,11,0.12);
+}
+
+.referral-checks {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.referral-check-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 14px;
+  color: var(--kent-text);
+  cursor: pointer;
+}
+
+.referral-check-item input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  cursor: pointer;
+  accent-color: #7a1f2e;
+  flex-shrink: 0;
+}
+
+.referral-submit-btn {
+  background: #7a1f2e;
+  color: #fff;
+  border: none;
+  border-radius: 12px;
+  padding: 12px 28px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.referral-submit-btn:hover { background: #5e1522; }
+.referral-submit-btn:disabled { opacity: 0.6; cursor: not-allowed; }
+
+@media (max-width: 600px) {
+  .referral-grid-2,
+  .referral-grid-4,
+  .referral-checks { grid-template-columns: 1fr; }
+  .referral-modal { padding: 20px; }
 }
 
 .resource-grid {
@@ -1764,6 +1951,12 @@ button:disabled {
   color: var(--kent-secondary);
 }
 
+.status-observation {
+  background: #F9F4EC;
+  border-color: rgba(178, 118, 21, 0.247);
+  color: #b27715;
+}
+
 /* what_matters_now */
 .what-matters-list {
   display: flex;
@@ -2353,6 +2546,113 @@ button:disabled {
 
 .ticket-success {
   color: var(--kent-success-text);
+}
+
+/* Evidence upload */
+.evidence-upload-wrap {
+  margin-top: 4px;
+  margin-bottom: 4px;
+}
+
+.evidence-label {
+  display: block;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--kent-text);
+  margin-bottom: 8px;
+}
+
+.evidence-hint {
+  font-weight: 400;
+  color: var(--kent-muted);
+  font-size: 12px;
+}
+
+.evidence-drop-zone {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  border: 1.5px dashed var(--kent-border);
+  border-radius: 10px;
+  padding: 14px 16px;
+  cursor: pointer;
+  background: var(--color-50);
+  color: var(--kent-muted);
+  font-size: 14px;
+  transition: border-color 0.2s, background 0.2s;
+  margin: 0;
+}
+
+.evidence-drop-zone:hover {
+  border-color: var(--kent-secondary);
+  background: var(--color16);
+  color: var(--kent-secondary);
+}
+
+.evidence-drop-icon {
+  font-size: 18px;
+}
+
+.evidence-file-list {
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.evidence-file-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--kent-success-bg);
+  border: 1px solid var(--kent-success-border);
+  border-radius: 8px;
+  padding: 6px 10px;
+  font-size: 13px;
+}
+
+.evidence-file-icon {
+  font-size: 15px;
+  flex-shrink: 0;
+}
+
+.evidence-file-name {
+  flex: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--kent-text);
+}
+
+.evidence-file-size {
+  color: var(--kent-muted);
+  font-size: 12px;
+  flex-shrink: 0;
+}
+
+.evidence-remove-btn {
+  all: unset;
+  cursor: pointer;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: rgba(0,0,0,0.08);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  color: var(--kent-muted);
+  flex-shrink: 0;
+  line-height: 1;
+  padding: 0;
+  margin: 0;
+}
+
+.evidence-remove-btn:hover {
+  background: var(--kent-danger-bg);
+  color: var(--kent-danger-text);
 }
 
 .ticket-contact-info {

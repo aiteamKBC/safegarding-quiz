@@ -28,6 +28,9 @@ export default function LoginPage() {
   return (
     <div className="page">
       <div className="card">
+        <div className="login-logo-wrap">
+          <img src="/kbc-logo.png" alt="Kent Business College" className="login-logo" />
+        </div>
         <h1>Wellbeing & Safeguarding Login</h1>
         <p>Please enter your Aptem learner email to log in.</p>
 

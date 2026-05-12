@@ -199,6 +199,31 @@ export async function apiFetch<T>(
   return data as T;
 }
 
+export async function apiFetchForm<T>(path: string, formData: FormData): Promise<T> {
+  const token = getToken();
+  const headers: Record<string, string> = {};
+  if (token) headers.Authorization = `Bearer ${token}`;
+
+  const response = await fetch(`${API_BASE}${path}`, {
+    method: "POST",
+    headers,
+    body: formData,
+  });
+
+  const data = await response.json();
+
+  if (!response.ok) {
+    const message: string = data.detail || data.message || "Something went wrong";
+    if (response.status === 401 || response.status === 403) {
+      clearToken();
+      window.location.href = "/";
+    }
+    throw new Error(message);
+  }
+
+  return data as T;
+}
+
 // tickets
 export type CreateTicketPayload = {
   ticket_type: "wellbeing" | "safeguarding";
@@ -213,4 +238,5 @@ export type CreateTicketPayload = {
 export type CreateTicketResponse = {
   message: string;
   ticket_id?: number | string;
+  evidence_count?: number;
 };

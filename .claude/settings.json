@@ -2,7 +2,8 @@
   "permissions": {
     "allow": [
       "Bash(find \"c:\\\\\\\\Users\\\\\\\\Lenovo\\\\\\\\safegarding-quiz\\\\\\\\frontend\\\\\\\\src\" -type f -name \"*.tsx\" -o -name \"*.ts\" -o -name \"*.css\")",
-      "Bash(.venvScriptspython.exe manage.py shell -c ' *)"
+      "Bash(.venvScriptspython.exe manage.py shell -c ' *)",
+      "Bash(.venv\\\\Scripts\\\\python.exe manage.py migrate)"
     ]
   }
 }

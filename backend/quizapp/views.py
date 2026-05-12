@@ -1,6 +1,8 @@
 import json
 import logging
+import os
 import re
+import uuid
 
 import requests
 from django.conf import settings
@@ -1070,20 +1072,31 @@ def notify_employer_view(request, attempt_id):
     return Response({"message": "Employer notification recorded successfully."})
 
 
+_ALLOWED_EVIDENCE_TYPES = {
+    "image/jpeg", "image/png", "image/gif", "image/webp",
+    "image/heic", "image/heif",
+    "application/pdf",
+    "application/msword",
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+}
+_MAX_EVIDENCE_SIZE = 10 * 1024 * 1024   # 10 MB
+_MAX_EVIDENCE_FILES = 5
+
+
 @api_view(["POST"])
 def create_ticket_view(request):
     record = get_record_from_request(request)
 
-    ticket_type = normalize_text(request.data.get("ticket_type", ""))
-    # Use the authenticated record as the source of truth for learner identity
-    full_name = (record.learner_name or (request.data.get("full_name") or "")).strip()
-    email = (record.learner_email or (request.data.get("email") or "")).strip()
-    subject = (request.data.get("subject") or "").strip()
-    details = (request.data.get("details") or "").strip()
-    urgency = normalize_text(request.data.get("urgency", "medium"))
-    preferred_contact = normalize_text(
-        request.data.get("preferred_contact", "email")
-    )
+    # support both multipart/form-data (with files) and application/json
+    data = request.POST if request.FILES else request.data
+
+    ticket_type = normalize_text(data.get("ticket_type", ""))
+    full_name = (record.learner_name or (data.get("full_name") or "")).strip()
+    email = (record.learner_email or (data.get("email") or "")).strip()
+    subject = (data.get("subject") or "").strip()
+    details = (data.get("details") or "").strip()
+    urgency = normalize_text(data.get("urgency", "medium"))
+    preferred_contact = normalize_text(data.get("preferred_contact", "email"))
 
     if ticket_type not in {"wellbeing", "safeguarding"}:
         return Response(
@@ -1134,12 +1147,126 @@ def create_ticket_view(request):
         status="open",
     )
 
+    # handle evidence file uploads
+    uploaded_files = request.FILES.getlist("evidence")[:_MAX_EVIDENCE_FILES]
+    evidence_list = []
+    for f in uploaded_files:
+        if f.content_type not in _ALLOWED_EVIDENCE_TYPES:
+            continue
+        if f.size > _MAX_EVIDENCE_SIZE:
+            continue
+        ext = os.path.splitext(f.name)[1].lower() or ""
+        safe_name = f"{uuid.uuid4().hex}{ext}"
+        rel_dir = os.path.join("tickets", str(ticket.id))
+        abs_dir = os.path.join(settings.MEDIA_ROOT, rel_dir)
+        os.makedirs(abs_dir, exist_ok=True)
+        abs_path = os.path.join(abs_dir, safe_name)
+        with open(abs_path, "wb") as dest:
+            for chunk in f.chunks():
+                dest.write(chunk)
+        evidence_list.append({
+            "uploaded_by": "learner",
+            "original_name": f.name,
+            "filename": safe_name,
+            "url": f"{settings.MEDIA_URL}{rel_dir}/{safe_name}",
+            "size": f.size,
+            "mime_type": f.content_type,
+        })
+
+    if evidence_list:
+        ticket.evidence = evidence_list
+        ticket.save(update_fields=["evidence"])
+
     return Response(
         {
             "message": "Ticket submitted successfully.",
             "ticket_id": ticket.id,
             "ticket_type": ticket.ticket_type,
             "status": ticket.status,
+            "evidence_count": len(evidence_list),
+        },
+        status=status.HTTP_201_CREATED,
+    )
+
+
+# ── Tasks-API: file upload (API key protected, no learner token needed) ──────
+
+@api_view(["POST"])
+def upload_ticket_evidence_view(request, ticket_id: int):
+    """
+    POST /tasks-api/tickets/<ticket_id>/upload-file/
+    Header: X-API-Key: <TASKS_API_KEY>
+    Body:   multipart/form-data  field name = "file" (single file)
+            optional field "uploaded_by" (default "learner")
+
+    Appends one file to the ticket's evidence JSON column.
+    """
+    # ── auth ──
+    expected_key = getattr(settings, "TASKS_API_KEY", "")
+    if not expected_key:
+        return Response({"detail": "Tasks API key not configured."}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+
+    provided_key = request.headers.get("X-API-Key", "")
+    if not provided_key or provided_key != expected_key:
+        return Response({"detail": "Invalid or missing API key."}, status=status.HTTP_403_FORBIDDEN)
+
+    # ── ticket lookup ──
+    try:
+        ticket = SupportTicket.objects.get(pk=ticket_id)
+    except SupportTicket.DoesNotExist:
+        return Response({"detail": "Ticket not found."}, status=status.HTTP_404_NOT_FOUND)
+
+    # ── file validation ──
+    f = request.FILES.get("file")
+    if not f:
+        return Response({"detail": "No file provided. Use field name 'file'."}, status=status.HTTP_400_BAD_REQUEST)
+
+    if f.content_type not in _ALLOWED_EVIDENCE_TYPES:
+        return Response(
+            {"detail": f"File type '{f.content_type}' is not allowed."},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+    if f.size > _MAX_EVIDENCE_SIZE:
+        return Response(
+            {"detail": f"File exceeds the 10 MB limit ({f.size / 1024 / 1024:.1f} MB)."},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+    # ── save file ──
+    ext = os.path.splitext(f.name)[1].lower() or ""
+    safe_name = f"{uuid.uuid4().hex}{ext}"
+    rel_dir = os.path.join("tickets", str(ticket.id))
+    abs_dir = os.path.join(settings.MEDIA_ROOT, rel_dir)
+    os.makedirs(abs_dir, exist_ok=True)
+    abs_path = os.path.join(abs_dir, safe_name)
+    with open(abs_path, "wb") as dest:
+        for chunk in f.chunks():
+            dest.write(chunk)
+
+    uploaded_by = (request.POST.get("uploaded_by") or "learner").strip()
+    new_entry = {
+        "uploaded_by": uploaded_by,
+        "original_name": f.name,
+        "filename": safe_name,
+        "url": f"{settings.MEDIA_URL}{rel_dir}/{safe_name}",
+        "size": f.size,
+        "mime_type": f.content_type,
+    }
+
+    # ── append to evidence column ──
+    current = ticket.evidence or []
+    current.append(new_entry)
+    ticket.evidence = current
+    ticket.save(update_fields=["evidence"])
+
+    return Response(
+        {
+            "message": "File uploaded successfully.",
+            "ticket_id": ticket.id,
+            "url": new_entry["url"],
+            "original_name": new_entry["original_name"],
+            "uploaded_by": new_entry["uploaded_by"],
         },
         status=status.HTTP_201_CREATED,
     )

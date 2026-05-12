@@ -110,6 +110,7 @@ class SupportTicket(models.Model):
     urgency = models.TextField(blank=True, null=True)
     preferred_contact = models.TextField(blank=True, null=True)
     status = models.TextField(default="open")
+    evidence = models.JSONField(blank=True, null=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

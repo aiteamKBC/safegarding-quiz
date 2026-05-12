@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import {
     apiFetch,
+    apiFetchForm,
     type ResultResponse,
     type AutomationDashboardResponse,
     type CreateTicketResponse,
@@ -75,6 +76,7 @@ const STATUS_LABEL_MAP: Record<string, { icon: string; className: string }> = {
     Improving: { icon: "↑", className: "status-improving" },
     Watch: { icon: "◎", className: "status-watch" },
     "Next step": { icon: "→", className: "status-next" },
+    Observation: { icon: "◉", className: "status-observation" },
 };
 
 const SAFEGUARDING_EMAIL = "safeguarding@kentbusinesscollege.com";
@@ -129,9 +131,35 @@ export default function ResultPage() {
         urgency: "medium" as "low" | "medium" | "high" | "critical",
         preferred_contact: "email" as "email" | "phone" | "teams",
     });
+    const [evidenceFiles, setEvidenceFiles] = useState<File[]>([]);
+    const evidenceInputRef = useRef<HTMLInputElement>(null);
 
     const [automationLoading, setAutomationLoading] = useState(true);
     const pollTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+    // Referral form
+    const [showReferral, setShowReferral] = useState(false);
+    const [referralSubmitting, setReferralSubmitting] = useState(false);
+    const [referralError, setReferralError] = useState("");
+    const [referralSuccess, setReferralSuccess] = useState("");
+    const [referralForm, setReferralForm] = useState({
+        referrer_name: "", referrer_role: "", referrer_dept: "", referrer_contact: "",
+        learner_fullname: "", learner_dob: "", learner_programme: "", learner_id: "", learner_coach: "",
+        concern_description: "",
+        concern_date: new Date().toISOString().split("T")[0],
+        concern_time: new Date().toTimeString().slice(0, 5),
+        concern_location: "", concern_those_present: "",
+        risk_physical: false, risk_sexual: false, risk_emotional: false,
+        risk_radicalisation: false, risk_neglect: false, risk_financial: false,
+        risk_domestic: false, risk_slavery: false, risk_forced_marriage: false,
+        risk_online: false, risk_self_harm: false, risk_bullying: false,
+        risk_other: "",
+        action_taken: "",
+        dsl_name: "", dsl_datetime: "",
+        consent: false,
+    });
+    const updateReferral = (field: string, value: string | boolean) =>
+        setReferralForm((p) => ({ ...p, [field]: value }));
 
     useEffect(() => {
         apiFetch<ResultResponse>(`/quiz/results/${attemptId}/`)
@@ -187,7 +215,85 @@ export default function ResultPage() {
             full_name: result.learner.name || "",
             email: result.learner.email || "",
         }));
+        setReferralForm((prev) => ({
+            ...prev,
+            learner_fullname: result.learner.name || "",
+            learner_programme: result.learner.programme || "",
+            learner_id: String(result.attempt_id || ""),
+        }));
     }, [result]);
+
+    const handleReferralSubmit = async (e: React.FormEvent) => {
+        e.preventDefault();
+        setReferralSubmitting(true);
+        setReferralError("");
+        setReferralSuccess("");
+
+        const refNum = `SR-${Date.now().toString().slice(-5)}`;
+        const risks = [
+            referralForm.risk_physical && "Physical harm",
+            referralForm.risk_sexual && "Sexual harm",
+            referralForm.risk_emotional && "Emotional / Mental health",
+            referralForm.risk_radicalisation && "Radicalisation / Extremism",
+            referralForm.risk_neglect && "Neglect",
+            referralForm.risk_financial && "Financial harm",
+            referralForm.risk_domestic && "Domestic abuse",
+            referralForm.risk_slavery && "Modern slavery / exploitation",
+            referralForm.risk_forced_marriage && "Forced marriage / honour-based violence",
+            referralForm.risk_online && "Online safety",
+            referralForm.risk_self_harm && "Self-harm",
+            referralForm.risk_bullying && "Bullying / Harassment",
+            referralForm.risk_other && referralForm.risk_other,
+        ].filter(Boolean);
+
+        const details = [
+            `SAFEGUARDING REFERRAL — ${refNum}`,
+            "",
+            "PART 1 — REFERRER DETAILS",
+            `Name: ${referralForm.referrer_name} | Role: ${referralForm.referrer_role} | Dept: ${referralForm.referrer_dept} | Contact: ${referralForm.referrer_contact}`,
+            "",
+            "PART 2 — LEARNER DETAILS",
+            `Name: ${referralForm.learner_fullname} | Programme: ${referralForm.learner_programme} | ID: ${referralForm.learner_id} | DOB: ${referralForm.learner_dob} | Coach: ${referralForm.learner_coach}`,
+            "",
+            "PART 3 — NATURE OF CONCERN",
+            referralForm.concern_description,
+            `Date: ${referralForm.concern_date} | Time: ${referralForm.concern_time} | Location: ${referralForm.concern_location} | Those Present: ${referralForm.concern_those_present}`,
+            "",
+            "PART 4 — RISK INDICATORS",
+            ...risks.map((r) => `• ${r}`),
+            "",
+            "PART 5 — ACTION TAKEN SO FAR",
+            referralForm.action_taken,
+            "",
+            "PART 6 — REFERRAL TO DSL",
+            `DSL Name: ${referralForm.dsl_name} | Date & Time: ${referralForm.dsl_datetime}`,
+            "",
+            "PART 7 — CONSENT",
+            referralForm.consent
+                ? "Referrer confirms consent has been considered in line with safeguarding policy."
+                : "Consent not confirmed.",
+        ].join("\n");
+
+        try {
+            await apiFetch<CreateTicketResponse>("/tickets/create/", {
+                method: "POST",
+                body: JSON.stringify({
+                    ticket_type: "safeguarding",
+                    full_name: referralForm.learner_fullname,
+                    email: result?.learner.email || "",
+                    subject: `Safeguarding Referral — ${refNum}`,
+                    details,
+                    urgency: "high",
+                    preferred_contact: "email",
+                }),
+            });
+            setReferralSuccess(`Referral ${refNum} submitted successfully.`);
+        } catch (err) {
+            setReferralError(err instanceof Error ? err.message : "Failed to submit referral");
+        } finally {
+            setReferralSubmitting(false);
+        }
+    };
 
     const openTicketForm = (type: "wellbeing" | "safeguarding") => {
         setTicketType(type);
@@ -200,7 +306,19 @@ export default function ResultPage() {
         }));
     };
 
-    const closeTicketForm = () => { setTicketType(null); setTicketError(""); setTicketSuccess(""); };
+    const closeTicketForm = () => { setTicketType(null); setTicketError(""); setTicketSuccess(""); setEvidenceFiles([]); };
+
+    const handleEvidenceChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const selected = Array.from(e.target.files || []);
+        setEvidenceFiles((prev) => {
+            const combined = [...prev, ...selected];
+            return combined.slice(0, 5);
+        });
+        if (evidenceInputRef.current) evidenceInputRef.current.value = "";
+    };
+
+    const removeEvidence = (idx: number) =>
+        setEvidenceFiles((prev) => prev.filter((_, i) => i !== idx));
 
     const handleAnnounceEmployer = async () => {
         setAnnounceLoading(true);
@@ -226,19 +344,20 @@ setAnnounceDone(true);
         setTicketError("");
         setTicketSuccess("");
         try {
-            const response = await apiFetch<CreateTicketResponse>("/tickets/create/", {
-                method: "POST",
-                body: JSON.stringify({
-                    ticket_type: ticketType,
-                    full_name: ticketForm.full_name,
-                    email: ticketForm.email,
-                    subject: ticketForm.subject,
-                    details: ticketForm.details,
-                    urgency: ticketForm.urgency,
-                    preferred_contact: ticketForm.preferred_contact,
-                }),
-            });
-            setTicketSuccess(response.message || "Ticket submitted successfully.");
+            const fd = new FormData();
+            fd.append("ticket_type", ticketType);
+            fd.append("full_name", ticketForm.full_name);
+            fd.append("email", ticketForm.email);
+            fd.append("subject", ticketForm.subject);
+            fd.append("details", ticketForm.details);
+            fd.append("urgency", ticketForm.urgency);
+            fd.append("preferred_contact", ticketForm.preferred_contact);
+            evidenceFiles.forEach((f) => fd.append("evidence", f));
+
+            const response = await apiFetchForm<CreateTicketResponse>("/tickets/create/", fd);
+            const evidenceMsg = response.evidence_count ? ` (${response.evidence_count} file${response.evidence_count > 1 ? "s" : ""} attached)` : "";
+            setTicketSuccess((response.message || "Ticket submitted successfully.") + evidenceMsg);
+            setEvidenceFiles([]);
             setTicketForm((prev) => ({
                 ...prev,
                 subject: ticketType === "wellbeing" ? "Wellbeing support request" : "Safeguarding concern",
@@ -686,6 +805,9 @@ setAnnounceDone(true);
                         <button className="safeguarding-btn" onClick={() => openTicketForm("safeguarding")}>
                             I have a safeguarding concern
                         </button>
+                        <button className="referral-btn" onClick={() => { setShowReferral(true); setReferralError(""); setReferralSuccess(""); }}>
+                            Submit Safeguarding Referral
+                        </button>
                     </div>
 
                     <div className="student-card">
@@ -964,12 +1086,170 @@ setAnnounceDone(true);
                                     </div>
                                 )}
                             </div>
+                            <div className="evidence-upload-wrap">
+                                <label className="evidence-label">
+                                    Evidence <span className="evidence-hint">(optional · images & PDF · max 5 files · 10 MB each)</span>
+                                </label>
+                                <div className="evidence-drop-zone" onClick={() => evidenceInputRef.current?.click()}>
+                                    <span className="evidence-drop-icon">📎</span>
+                                    <span>Click to attach files</span>
+                                </div>
+                                <input
+                                    ref={evidenceInputRef}
+                                    type="file"
+                                    multiple
+                                    accept="image/*,.pdf,.doc,.docx"
+                                    onChange={handleEvidenceChange}
+                                    style={{ display: "none" }}
+                                />
+                                {evidenceFiles.length > 0 && (
+                                    <ul className="evidence-file-list">
+                                        {evidenceFiles.map((f, i) => (
+                                            <li key={i} className="evidence-file-item">
+                                                <span className="evidence-file-icon">
+                                                    {f.type.startsWith("image/") ? "🖼" : "📄"}
+                                                </span>
+                                                <span className="evidence-file-name">{f.name}</span>
+                                                <span className="evidence-file-size">
+                                                    ({(f.size / 1024).toFixed(0)} KB)
+                                                </span>
+                                                <button
+                                                    type="button"
+                                                    className="evidence-remove-btn"
+                                                    onClick={() => removeEvidence(i)}
+                                                    title="Remove"
+                                                >×</button>
+                                            </li>
+                                        ))}
+                                    </ul>
+                                )}
+                            </div>
                             {ticketError && <p className="error">{ticketError}</p>}
                             {ticketSuccess && <p className="ticket-success">{ticketSuccess}</p>}
                             <div className="ticket-actions">
                                 <button type="button" className="secondary-btn" onClick={closeTicketForm}>Cancel</button>
                                 <button type="submit" className="primary-btn" disabled={ticketSubmitting}>
                                     {ticketSubmitting ? "Submitting..." : "Submit Ticket"}
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            )}
+
+            {/* Safeguarding Referral Modal */}
+            {showReferral && (
+                <div className="ticket-modal-overlay" onClick={() => setShowReferral(false)}>
+                    <div className="referral-modal" onClick={(e) => e.stopPropagation()}>
+                        <div className="referral-modal-header">
+                            <div className="referral-modal-title">
+                                <div>
+                                    <p className="referral-ref-num">A unique reference number will be auto-generated</p>
+                                    <h2>Safeguarding Referral Form</h2>
+                                    <p className="referral-subtitle">This form is to be used to report a safeguarding concern about a learner. All concerns must be reported in line with Ofsted safeguarding expectations.</p>
+                                </div>
+                            </div>
+                            <button className="ticket-close-btn" onClick={() => setShowReferral(false)}>×</button>
+                        </div>
+
+                        <form className="referral-form" onSubmit={handleReferralSubmit}>
+
+                            {/* Part 1 */}
+                            <div className="referral-part">
+                                <h4 className="referral-part-title">Part 1: <span>Details of Referrer</span></h4>
+                                <div className="referral-grid-2">
+                                    <div className="referral-field"><label>Name</label><input value={referralForm.referrer_name} onChange={(e) => updateReferral("referrer_name", e.target.value)} required /></div>
+                                    <div className="referral-field"><label>Role</label><input value={referralForm.referrer_role} onChange={(e) => updateReferral("referrer_role", e.target.value)} /></div>
+                                    <div className="referral-field"><label>Department</label><input value={referralForm.referrer_dept} onChange={(e) => updateReferral("referrer_dept", e.target.value)} /></div>
+                                    <div className="referral-field"><label>Contact Details</label><input value={referralForm.referrer_contact} onChange={(e) => updateReferral("referrer_contact", e.target.value)} /></div>
+                                </div>
+                            </div>
+
+                            {/* Part 2 */}
+                            <div className="referral-part">
+                                <h4 className="referral-part-title">Part 2: <span>Details of Learner</span></h4>
+                                <div className="referral-grid-2">
+                                    <div className="referral-field"><label>Full Name</label><input value={referralForm.learner_fullname} onChange={(e) => updateReferral("learner_fullname", e.target.value)} required /></div>
+                                    <div className="referral-field"><label>Date of Birth</label><input type="date" value={referralForm.learner_dob} onChange={(e) => updateReferral("learner_dob", e.target.value)} /></div>
+                                    <div className="referral-field"><label>Learner's Programme</label><input value={referralForm.learner_programme} onChange={(e) => updateReferral("learner_programme", e.target.value)} /></div>
+                                    <div className="referral-field"><label>Learner ID</label><input value={referralForm.learner_id} onChange={(e) => updateReferral("learner_id", e.target.value)} /></div>
+                                    <div className="referral-field referral-field-full"><label>Skills Coach Name</label><input value={referralForm.learner_coach} onChange={(e) => updateReferral("learner_coach", e.target.value)} /></div>
+                                </div>
+                            </div>
+
+                            {/* Part 3 */}
+                            <div className="referral-part">
+                                <h4 className="referral-part-title">Part 3: <span>Nature of Concern</span></h4>
+                                <div className="referral-field"><label>Description</label><textarea rows={4} value={referralForm.concern_description} onChange={(e) => updateReferral("concern_description", e.target.value)} required /></div>
+                                <div className="referral-grid-4">
+                                    <div className="referral-field"><label>Date</label><input type="date" value={referralForm.concern_date} onChange={(e) => updateReferral("concern_date", e.target.value)} /></div>
+                                    <div className="referral-field"><label>Time</label><input type="time" value={referralForm.concern_time} onChange={(e) => updateReferral("concern_time", e.target.value)} /></div>
+                                    <div className="referral-field"><label>Location</label><input value={referralForm.concern_location} onChange={(e) => updateReferral("concern_location", e.target.value)} /></div>
+                                    <div className="referral-field"><label>Those Present</label><input value={referralForm.concern_those_present} onChange={(e) => updateReferral("concern_those_present", e.target.value)} /></div>
+                                </div>
+                            </div>
+
+                            {/* Part 4 */}
+                            <div className="referral-part">
+                                <h4 className="referral-part-title">Part 4: <span>Risk Indicators</span></h4>
+                                <div className="referral-checks">
+                                    {([
+                                        ["risk_physical", "Physical harm"],
+                                        ["risk_sexual", "Sexual harm"],
+                                        ["risk_emotional", "Emotional / Mental health"],
+                                        ["risk_radicalisation", "Radicalisation / Extremism"],
+                                        ["risk_neglect", "Neglect"],
+                                        ["risk_financial", "Financial harm"],
+                                        ["risk_domestic", "Domestic abuse"],
+                                        ["risk_slavery", "Modern slavery / exploitation"],
+                                        ["risk_forced_marriage", "Forced marriage / honour-based violence"],
+                                        ["risk_online", "Online safety"],
+                                        ["risk_self_harm", "Self-harm"],
+                                        ["risk_bullying", "Bullying / Harassment"],
+                                    ] as [string, string][]).map(([key, label]) => (
+                                        <label key={key} className="referral-check-item">
+                                            <input type="checkbox" checked={referralForm[key as keyof typeof referralForm] as boolean} onChange={(e) => updateReferral(key, e.target.checked)} />
+                                            <span>{label}</span>
+                                        </label>
+                                    ))}
+                                    <div className="referral-field" style={{ gridColumn: "1/-1", marginTop: 4 }}>
+                                        <label>Other (specify)</label>
+                                        <input value={referralForm.risk_other} onChange={(e) => updateReferral("risk_other", e.target.value)} />
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Part 5 */}
+                            <div className="referral-part">
+                                <h4 className="referral-part-title">Part 5: <span>Action Taken So Far</span></h4>
+                                <div className="referral-field"><textarea rows={3} value={referralForm.action_taken} onChange={(e) => updateReferral("action_taken", e.target.value)} /></div>
+                            </div>
+
+                            {/* Part 6 */}
+                            <div className="referral-part">
+                                <h4 className="referral-part-title">Part 6: <span>Referral to DSL</span></h4>
+                                <div className="referral-grid-2">
+                                    <div className="referral-field"><label>DSL Name</label><input value={referralForm.dsl_name} onChange={(e) => updateReferral("dsl_name", e.target.value)} /></div>
+                                    <div className="referral-field"><label>Date &amp; Time</label><input type="datetime-local" value={referralForm.dsl_datetime} onChange={(e) => updateReferral("dsl_datetime", e.target.value)} /></div>
+                                </div>
+                            </div>
+
+                            {/* Part 7 */}
+                            <div className="referral-part">
+                                <h4 className="referral-part-title">Part 7: <span>Consent</span></h4>
+                                <label className="referral-check-item">
+                                    <input type="checkbox" checked={referralForm.consent} onChange={(e) => updateReferral("consent", e.target.checked)} />
+                                    <span>I confirm that consent has been considered in line with safeguarding policy.</span>
+                                </label>
+                            </div>
+
+{referralError && <p className="error" style={{ marginTop: 8 }}>{referralError}</p>}
+                            {referralSuccess && <p className="ticket-success" style={{ marginTop: 8 }}>{referralSuccess}</p>}
+
+                            <div className="ticket-actions" style={{ marginTop: 20 }}>
+                                <button type="button" className="secondary-btn" onClick={() => setShowReferral(false)}>Cancel</button>
+                                <button type="submit" className="referral-submit-btn" disabled={referralSubmitting}>
+                                    {referralSubmitting ? "Submitting..." : "Submit Referral"}
                                 </button>
                             </div>
                         </form>
