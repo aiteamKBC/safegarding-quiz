@@ -3,25 +3,27 @@
 .env.*
 !.env.example
 
-# Python venv
+# Python
 .venv/
-
-# Python cache
 __pycache__/
 *.pyc
 *.pyo
-
-# Django
 db.sqlite3
-*.log
 
 # Uploaded media files
 media/
+
+# Node
+node_modules/
+dist/
+dist-ssr/
 
 # Secrets / service account keys
 *.json
 !package.json
 !package-lock.json
+!tsconfig*.json
+!vite.config.*
 
 # VS Code
 .vscode/
@@ -32,3 +34,4 @@ media/
 # OS
 .DS_Store
 Thumbs.db
+*.log
