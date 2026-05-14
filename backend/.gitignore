@@ -1,0 +1,22 @@
+# Python venv
+backend/.venv/
+.venv/
+ai-marking-tool-480910-1f3c7a43f500.json
+
+# Python cache
+__pycache__/
+*.pyc
+
+# Environment variables
+backend/.env/
+.env/
+
+# Local DB (if exists)
+backend/db.sqlite3
+db.sqlite3
+
+# VS Code
+.vscode/
+
+#claude
+safeguarding-quiz/.claude/

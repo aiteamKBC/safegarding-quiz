@@ -84,10 +84,10 @@ const SAFEGUARDING_EMAIL = "safeguarding@kentbusinesscollege.com";
 function getEmailServices(email: string) {
     const e = encodeURIComponent(email);
     return [
-        { name: "Outlook 365",  sub: "Work / school account (Office 365)", url: `https://outlook.office.com/mail/deeplink/compose?to=${e}` },
-        { name: "Outlook.com",  sub: "Personal Microsoft account",          url: `https://outlook.live.com/mail/deeplink/compose?to=${e}` },
-        { name: "Gmail",        sub: "mail.google.com",                     url: `https://mail.google.com/mail/?view=cm&fs=1&to=${e}` },
-        { name: "Yahoo Mail",   sub: "mail.yahoo.com",                      url: `https://compose.mail.yahoo.com/?to=${e}` },
+        { name: "Outlook 365", sub: "Work / school account (Office 365)", url: `https://outlook.office.com/mail/deeplink/compose?to=${e}` },
+        { name: "Outlook.com", sub: "Personal Microsoft account", url: `https://outlook.live.com/mail/deeplink/compose?to=${e}` },
+        { name: "Gmail", sub: "mail.google.com", url: `https://mail.google.com/mail/?view=cm&fs=1&to=${e}` },
+        { name: "Yahoo Mail", sub: "mail.yahoo.com", url: `https://compose.mail.yahoo.com/?to=${e}` },
     ];
 }
 
@@ -174,6 +174,8 @@ export default function ResultPage() {
 
         let polls = 0;
         const MAX_POLLS = 12;
+        const MIN_WAIT_MS = 15_000;
+        const startTime = Date.now();
 
         const fetchAutomation = () => {
             apiFetch<AutomationDashboardResponse>(
@@ -188,7 +190,9 @@ export default function ResultPage() {
                         typeof dashboard === "object" &&
                         Object.keys(dashboard).length > 0;
 
-                    if (hasContent || polls >= MAX_POLLS) {
+                    const minWaitMet = Date.now() - startTime >= MIN_WAIT_MS;
+
+                    if (polls >= MAX_POLLS || (hasContent && minWaitMet)) {
                         setAutomationData(data);
                         setAutomationLoading(false);
                     } else {
@@ -326,7 +330,7 @@ export default function ResultPage() {
         try {
             await apiFetch(`/quiz/results/${attemptId}/notify-employer/`, { method: "POST" });
 
-setAnnounceDone(true);
+            setAnnounceDone(true);
         } catch (err) {
             setAnnounceError(err instanceof Error ? err.message : "Failed to send notification");
         } finally {
@@ -572,6 +576,10 @@ setAnnounceDone(true);
                         Your responses have been recorded and your coach will be able to
                         review them as part of your ongoing support.
                     </p>
+                    <p style={{ fontSize: "14px", lineHeight: "1.5", color: "var(--kent-text)", marginTop: 12, fontWeight: 600 }}>
+                        "Please feel free to reach out if you have any questions or concerns. Only Safeguarding leads will have access to these tickets."
+                    </p>
+
                     <div className="results-privacy-hint">
                         🔒 Your quiz results are confidential and shared only with your coach — not your employer.
                     </div>
@@ -1243,7 +1251,7 @@ setAnnounceDone(true);
                                 </label>
                             </div>
 
-{referralError && <p className="error" style={{ marginTop: 8 }}>{referralError}</p>}
+                            {referralError && <p className="error" style={{ marginTop: 8 }}>{referralError}</p>}
                             {referralSuccess && <p className="ticket-success" style={{ marginTop: 8 }}>{referralSuccess}</p>}
 
                             <div className="ticket-actions" style={{ marginTop: 20 }}>
