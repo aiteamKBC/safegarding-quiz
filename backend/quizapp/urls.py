@@ -2,6 +2,7 @@ from django.urls import path
 from .views import (
     login_view,
     instructions_view,
+    quiz_status_view,
     start_quiz_view,
     questions_view,
     submit_quiz_view,
@@ -10,6 +11,8 @@ from .views import (
     notify_employer_view,
     automation_dashboard_view,
     create_ticket_view,
+    onboarding_progress_view,
+    onboarding_reports_view,
     onboarding_sections_view,
     onboarding_questions_view,
     onboarding_submit_view,
@@ -18,6 +21,7 @@ from .views import (
 urlpatterns = [
     path("auth/login/", login_view),
     path("quiz/instructions/", instructions_view),
+    path("quiz/status/", quiz_status_view),
     path("quiz/start/", start_quiz_view),
     path("quiz/questions/", questions_view),
     path("quiz/submit/", submit_quiz_view),
@@ -26,6 +30,8 @@ urlpatterns = [
     path("quiz/results/<int:attempt_id>/notify-employer/", notify_employer_view),
     path("quiz/results/<int:attempt_id>/automation-dashboard/", automation_dashboard_view),
     path("tickets/create/", create_ticket_view),
+    path("onboarding/progress/", onboarding_progress_view),
+    path("onboarding/reports/", onboarding_reports_view),
     path("onboarding/sections/", onboarding_sections_view),
     path("onboarding/sections/<str:section_id>/questions/", onboarding_questions_view),
     path("onboarding/sections/<str:section_id>/submit/", onboarding_submit_view),

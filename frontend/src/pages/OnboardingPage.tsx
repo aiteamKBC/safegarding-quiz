@@ -1,6 +1,11 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { apiFetch } from "../api";
+import { LearnerReportModal, type FullSectionReport } from "../components/LearnerReportModal";
+import {
+  Laptop, Headphones, PenLine, Sparkles, Mic, HeartPulse,
+  Play, Eye, Lock, Trophy,
+} from "lucide-react";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -32,25 +37,44 @@ type SectionQuestions = {
   questions: Question[];
 };
 
-type Answers = Record<number, number>; // question.id → option value
+type Answers = Record<number, number>;
+type SectionReport = FullSectionReport;
 
-// ── SVG layout ────────────────────────────────────────────────────────────────
+// ── Section metadata ──────────────────────────────────────────────────────────
+
+const SECTION_ICONS = [Laptop, Headphones, PenLine, Sparkles, Mic, HeartPulse];
+
+const SECTION_DESCRIPTIONS: Record<number, string> = {
+  1: "Confidence with LMS, Teams, uploads and online platforms.",
+  2: "Captions, readable materials and access adjustments.",
+  3: "Reading, writing, processing and assignment support.",
+  4: "Focus, planning, organisation and task completion.",
+  5: "Presentations, speaking, camera, microphone and more.",
+  6: "Energy, motivation, attendance and capacity to learn.",
+};
+
+// ── SVG / layout constants ────────────────────────────────────────────────────
+
+const VB_W = 990;
+const VB_H = 490;
+const CARD_W = 130;
+const CARD_HALF = CARD_W / 2;
 
 const NODE_POS = [
-  { x: 70,  y: 270 },
-  { x: 230, y: 145 },
-  { x: 400, y: 185 },
-  { x: 565, y: 270 },
-  { x: 730, y: 150 },
-  { x: 915, y: 110 },
+  { x: 95,  y: 275 },
+  { x: 255, y: 148 },
+  { x: 415, y: 188 },
+  { x: 570, y: 275 },
+  { x: 730, y: 152 },
+  { x: 890, y: 112 },
 ];
 
 const PATH_D =
-  "M 70,270 C 140,270 155,145 230,145 " +
-  "C 305,145 330,185 400,185 " +
-  "C 475,185 490,270 565,270 " +
-  "C 645,270 660,150 730,150 " +
-  "C 810,150 840,110 915,110";
+  "M 95,275 C 175,275 175,148 255,148 " +
+  "C 335,148 335,188 415,188 " +
+  "C 495,188 495,275 570,275 " +
+  "C 650,275 650,152 730,152 " +
+  "C 810,152 810,112 890,112";
 
 // ── Component ─────────────────────────────────────────────────────────────────
 
@@ -59,34 +83,59 @@ export default function OnboardingPage() {
 
   const [sections, setSections] = useState<Section[]>([]);
   const [sectionsError, setSectionsError] = useState("");
-
   const [completedIds, setCompletedIds] = useState<Set<string>>(new Set());
+  const [reports, setReports] = useState<Record<string, SectionReport>>({});
+  const [activeReport, setActiveReport] = useState<{ sectionTitle: string; data: SectionReport } | null>(null);
+  const [selectedSection, setSelectedSection] = useState<Section | null>(null);
 
-  // modal state
   const [openSection, setOpenSection] = useState<Section | null>(null);
   const [modalData, setModalData] = useState<SectionQuestions | null>(null);
   const [modalLoading, setModalLoading] = useState(false);
   const [modalError, setModalError] = useState("");
   const [answers, setAnswers] = useState<Answers>({});
-
-  // safeguarding start
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState("");
+  const [quizStatus, setQuizStatus] = useState<{ has_history: boolean; attempt_id: number } | null>(null);
 
-  const [starting, setStarting] = useState(false);
-  const [startError, setStartError] = useState("");
-
-  // Load sections on mount
   useEffect(() => {
-    apiFetch<{ sections: Section[] }>("/onboarding/sections/")
-      .then((d) => setSections(d.sections))
-      .catch((err: unknown) => {
-        setSectionsError(err instanceof Error ? err.message : "Failed to load sections");
-      });
+    Promise.allSettled([
+      apiFetch<{ sections: Section[] }>("/onboarding/sections/"),
+      apiFetch<{ completed_sections: string[] }>("/onboarding/progress/"),
+      apiFetch<{ reports: Record<string, SectionReport> }>("/onboarding/reports/"),
+    ]).then(([sectionsResult, progressResult, reportsResult]) => {
+      if (sectionsResult.status === "fulfilled") {
+        setSections(sectionsResult.value.sections);
+      } else {
+        setSectionsError("Failed to load sections");
+      }
+      if (progressResult.status === "fulfilled") {
+        setCompletedIds(new Set(progressResult.value.completed_sections));
+      }
+      if (reportsResult.status === "fulfilled") {
+        setReports(reportsResult.value.reports);
+      }
+    });
   }, []);
 
   const firstUncompletedSection = sections.find((s) => !completedIds.has(s.section_id));
   const allDone = sections.length > 0 && completedIds.size === sections.length;
+  const pct = sections.length ? Math.round((completedIds.size / sections.length) * 100) : 0;
+
+  // Auto-select the current step
+  useEffect(() => {
+    if (firstUncompletedSection && !selectedSection) {
+      setSelectedSection(firstUncompletedSection);
+    }
+  }, [firstUncompletedSection]);
+
+  // Fetch quiz history status once all sections are done
+  useEffect(() => {
+    if (allDone && !quizStatus) {
+      apiFetch<{ has_history: boolean; attempt_id: number }>("/quiz/status/")
+        .then(setQuizStatus)
+        .catch(() => setQuizStatus({ has_history: false, attempt_id: 0 }));
+    }
+  }, [allDone]);
 
   function nodeState(section: Section): "completed" | "current" | "locked" {
     if (completedIds.has(section.section_id)) return "completed";
@@ -94,16 +143,12 @@ export default function OnboardingPage() {
     return "locked";
   }
 
-  async function handleNodeClick(section: Section) {
-    const s = nodeState(section);
-    if (s === "locked") return;
-
+  async function openQuizModal(section: Section) {
     setOpenSection(section);
     setAnswers({});
     setModalData(null);
     setModalError("");
     setModalLoading(true);
-
     try {
       const data = await apiFetch<SectionQuestions>(
         `/onboarding/sections/${section.section_id}/questions/`
@@ -130,19 +175,13 @@ export default function OnboardingPage() {
     if (!openSection) return;
     setSubmitting(true);
     setSubmitError("");
-
     try {
-      // Convert answers { dbId(number): value(number) } → { "dbId": value }
       const answersPayload: Record<string, number> = {};
-      for (const [k, v] of Object.entries(answers)) {
-        answersPayload[String(k)] = v;
-      }
-
+      for (const [k, v] of Object.entries(answers)) answersPayload[String(k)] = v;
       await apiFetch(`/onboarding/sections/${openSection.section_id}/submit/`, {
         method: "POST",
         body: JSON.stringify({ answers: answersPayload }),
       });
-
       setCompletedIds((prev) => new Set([...prev, openSection.section_id]));
       handleCloseModal();
     } catch (err: unknown) {
@@ -152,176 +191,255 @@ export default function OnboardingPage() {
     }
   }
 
-  async function handleBeginSafeguarding() {
-    setStarting(true);
-    setStartError("");
-    try {
-      const res = await apiFetch<{ attempt_id: number }>("/quiz/start/", { method: "POST" });
-      navigate(`/quiz/${res.attempt_id}`);
-    } catch (err: unknown) {
-      setStartError(err instanceof Error ? err.message : "Failed to start");
-      setStarting(false);
-    }
-  }
-
-  // How many required questions are answered in the current modal
   const requiredQuestions = modalData?.questions.filter((q) => q.required) ?? [];
   const answeredRequired = requiredQuestions.filter((q) => answers[q.id] !== undefined).length;
   const canSubmit = requiredQuestions.length === 0 || answeredRequired === requiredQuestions.length;
 
-  // Group modal questions by sub_section
   const questionGroups: { sub: string; questions: Question[] }[] = [];
   if (modalData) {
     for (const q of modalData.questions) {
       const sub = q.sub_section || "";
       const last = questionGroups[questionGroups.length - 1];
-      if (last && last.sub === sub) {
-        last.questions.push(q);
-      } else {
-        questionGroups.push({ sub, questions: [q] });
-      }
+      if (last && last.sub === sub) last.questions.push(q);
+      else questionGroups.push({ sub, questions: [q] });
     }
   }
 
-  // ── render ──────────────────────────────────────────────────────────────────
+  const selState = selectedSection ? nodeState(selectedSection) : null;
+  const selIdx = selectedSection ? sections.findIndex((s) => s.section_id === selectedSection.section_id) : -1;
+  void selIdx;
+  const displaySections = sections.length > 0 ? sections : Array.from({ length: 6 }, () => null as unknown as Section);
 
   if (sectionsError) {
     return (
       <div className="ob-page">
-        <div className="ob-header">
-          <p style={{ color: "var(--kent-danger-text)" }}>{sectionsError}</p>
-        </div>
+        <p style={{ color: "var(--kent-danger-text)" }}>{sectionsError}</p>
       </div>
     );
   }
 
-  const displaySections = sections.length > 0 ? sections : Array.from({ length: 6 });
-
   return (
     <div className="ob-page">
-      {/* Header */}
+
+      {/* ── Header ── */}
       <div className="ob-header">
-        <div className="ob-eyebrow">Wellbeing &amp; Safeguarding</div>
+        <div className="ob-eyebrow">Onboarding Dashboard</div>
         <h1 className="ob-title">Your Assessment Journey</h1>
         <p className="ob-subtitle">
-          Complete each questionnaire below, then begin the main safeguarding assessment.
+          Complete each questionnaire in order. Your progress is saved automatically,
+          and the main safeguarding assessment unlocks when all six areas are complete.
         </p>
       </div>
 
-      {/* Journey SVG */}
-      <div className="ob-map-wrap">
-        <svg
-          className="ob-svg"
-          viewBox="0 0 1000 380"
-          preserveAspectRatio="xMidYMid meet"
-        >
-          <path d={PATH_D} className="ob-path-bg" />
+      {/* ── Stats row ── */}
+      <div className="ob-stats-row">
+        <div className="ob-stat-card ob-stat-card--count">
+          <div className="ob-stat-eyebrow">Progress</div>
+          <div className="ob-stat-big">{completedIds.size}/{sections.length || 6}</div>
+          <div className="ob-stat-sub">questionnaires completed</div>
+        </div>
+        <div className="ob-stat-card ob-stat-card--bar">
+          <div className="ob-stat-bar-top">
+            <span className="ob-stat-eyebrow">Journey completion</span>
+            <span className="ob-stat-pct">{pct}%</span>
+          </div>
+          <div className="ob-stat-progress-track">
+            <div className="ob-stat-progress-fill" style={{ width: `${pct}%` }} />
+          </div>
+          <div className="ob-stat-current-step">
+            {allDone
+              ? "All sections complete — ready to begin!"
+              : firstUncompletedSection
+              ? <>Current step: <strong>{firstUncompletedSection.section_title}</strong></>
+              : "Loading…"}
+          </div>
+        </div>
+      </div>
 
+      {/* ── Journey map ── */}
+      <div className="ob-map-wrap">
+        <div className="ob-journey-bg">
+          {/* Path SVG — behind cards */}
+          <svg
+            viewBox={`0 0 ${VB_W} ${VB_H}`}
+            style={{ position: "absolute", inset: 0, width: "100%", height: "100%", pointerEvents: "none" }}
+            preserveAspectRatio="none"
+          >
+            <path d={PATH_D} className="ob-path-bg" />
+          </svg>
+
+          {/* Cards */}
           {displaySections.map((section, i) => {
-            const pos = NODE_POS[i] ?? { x: 80 + i * 160, y: 200 };
+            const pos = NODE_POS[i] ?? { x: 95 + i * 160, y: 200 };
+            const cardLeftPct = ((pos.x - CARD_HALF) / VB_W) * 100;
+            const cardTopPct  = ((pos.y - 52) / VB_H) * 100;
+            const cardWidthPct = (CARD_W / VB_W) * 100;
+
             if (!section) {
-              // skeleton node while loading
               return (
-                <g key={i}>
-                  <circle cx={pos.x} cy={pos.y} r={24} className="ob-circle ob-node-locked" style={{ opacity: 0.3 }} />
-                </g>
+                <div key={i} className="ob-card ob-card-skeleton" style={{
+                  left: `${cardLeftPct}%`, top: `${cardTopPct}%`, width: `${cardWidthPct}%`,
+                }} />
               );
             }
-            const s = nodeState(section as Section);
-            const clickable = s !== "locked";
+
+            const s = nodeState(section);
+            const sectionId = section.section_id;
+            const SectionIcon = SECTION_ICONS[(section.section_order ?? i + 1) - 1] ?? Laptop;
+            const desc = SECTION_DESCRIPTIONS[section.section_order ?? (i + 1)] ?? "";
+            const isSelected = selectedSection?.section_id === sectionId;
 
             return (
-              <g
-                key={(section as Section).section_id}
-                className={`ob-node ob-node-${s}`}
-                onClick={() => handleNodeClick(section as Section)}
-                style={{ cursor: clickable ? "pointer" : "default" }}
-                tabIndex={clickable ? 0 : -1}
-                onKeyDown={(e) => e.key === "Enter" && handleNodeClick(section as Section)}
+              <div
+                key={sectionId}
+                className={`ob-card ob-card-${s}${isSelected ? " ob-card-selected" : ""}`}
+                style={{ left: `${cardLeftPct}%`, top: `${cardTopPct}%`, width: `${cardWidthPct}%` }}
+                onClick={() => { if (s !== "locked") setSelectedSection(section); }}
               >
-                {s === "current" && (
-                  <circle cx={pos.x} cy={pos.y} r={38} className="ob-pulse-ring" />
-                )}
-                {s === "completed" && (
-                  <circle cx={pos.x} cy={pos.y} r={30} className="ob-done-ring" />
-                )}
-
-                <circle cx={pos.x} cy={pos.y} r={24} className="ob-circle" />
-
-                {s === "completed" ? (
-                  <text x={pos.x} y={pos.y} textAnchor="middle" dominantBaseline="central" className="ob-check">✓</text>
-                ) : (
-                  <text x={pos.x} y={pos.y} textAnchor="middle" dominantBaseline="central" className={s === "locked" ? "ob-lock" : "ob-num"}>
-                    {i + 1}
-                  </text>
-                )}
-
-                <text x={pos.x} y={pos.y - 40} textAnchor="middle" className="ob-num-label">{i + 1}</text>
-
-                {/* Wrap title into 2 lines if long */}
-                <foreignObject x={pos.x - 65} y={pos.y + 34} width={130} height={40} style={{ overflow: "visible" }}>
-                  <div
-                    style={{
-                      fontSize: 11,
-                      fontWeight: 700,
-                      textAlign: "center",
-                      lineHeight: 1.3,
-                      color: s === "completed" ? "var(--color-4)" : s === "current" ? "#fff" : "rgba(255,255,255,0.35)",
-                      wordBreak: "break-word",
-                    }}
-                  >
-                    {(section as Section).section_title}
-                  </div>
-                </foreignObject>
-
-                {s === "current" && (
-                  <g>
-                    <rect x={pos.x - 30} y={pos.y + 80} width={60} height={20} rx={10} className="ob-start-badge" />
-                    <text x={pos.x} y={pos.y + 90} textAnchor="middle" dominantBaseline="central" className="ob-start-text">START</text>
-                  </g>
-                )}
-                {s === "completed" && (
-                  <g>
-                    <rect x={pos.x - 26} y={pos.y + 80} width={52} height={18} rx={9} className="ob-done-badge" />
-                    <text x={pos.x} y={pos.y + 89} textAnchor="middle" dominantBaseline="central" className="ob-done-text">DONE</text>
-                  </g>
-                )}
-              </g>
+                <div className="ob-card-num">{i + 1}</div>
+                <div className={`ob-card-circle ob-card-circle-${s}`}>
+                  {s === "completed" ? "✓" : i + 1}
+                </div>
+                <div className="ob-card-icon">
+                  <SectionIcon size={12} />
+                </div>
+                <div className="ob-card-title">{section.section_title}</div>
+                <div className="ob-card-desc">{desc}</div>
+                <div className="ob-card-footer">
+                  {s === "completed" && (
+                    <>
+                      <span className="ob-card-badge ob-badge-done">DONE</span>
+                      {reports[sectionId] && (
+                        <button
+                          className="ob-card-eye"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setActiveReport({ sectionTitle: section.section_title, data: reports[sectionId] });
+                          }}
+                        >
+                          <Eye size={12} />
+                          <span className="ob-eye-tip">View report</span>
+                        </button>
+                      )}
+                    </>
+                  )}
+                  {s === "current" && (
+                    <button
+                      className="ob-card-badge ob-badge-start"
+                      onClick={(e) => { e.stopPropagation(); openQuizModal(section); }}
+                    >
+                      <Play size={9} fill="white" style={{ flexShrink: 0 }} /> START
+                    </button>
+                  )}
+                  {s === "locked" && (
+                    <span className="ob-card-badge ob-badge-locked">LOCKED</span>
+                  )}
+                </div>
+              </div>
             );
           })}
-        </svg>
+        </div>
       </div>
 
-      {/* Progress bar */}
-      <div className="ob-progress-wrap">
-        <div className="ob-progress-bar">
-          <div
-            className="ob-progress-fill"
-            style={{ width: sections.length ? `${(completedIds.size / sections.length) * 100}%` : "0%" }}
-          />
+      {/* ── Bottom section ── */}
+      <div className="ob-bottom-row">
+
+        {/* Selected step panel */}
+        <div className="ob-selected-panel">
+          {selectedSection ? (
+            <>
+              <div className="ob-sel-eyebrow">Selected Step</div>
+              <h3 className="ob-sel-title">{selectedSection.section_title}</h3>
+              <p className="ob-sel-desc">
+                {SECTION_DESCRIPTIONS[selectedSection.section_order ?? 1]}
+              </p>
+              <div className="ob-sel-footer">
+                {selState === "current" && (
+                  <button className="ob-sel-btn ob-sel-btn--purple" onClick={() => openQuizModal(selectedSection)}>
+                    <Play size={13} fill="white" /> Start questionnaire
+                  </button>
+                )}
+                {selState === "completed" && reports[selectedSection.section_id] && (
+                  <button
+                    className="ob-sel-btn ob-sel-btn--gold"
+                    onClick={() => setActiveReport({ sectionTitle: selectedSection.section_title, data: reports[selectedSection.section_id] })}
+                  >
+                    <Eye size={13} /> View Report
+                  </button>
+                )}
+                {selState === "completed" && !reports[selectedSection.section_id] && (
+                  <span className="ob-sel-done-chip">Completed ✓</span>
+                )}
+                {selState === "locked" && (
+                  <span className="ob-sel-locked-chip"><Lock size={12} /> Locked</span>
+                )}
+              </div>
+            </>
+          ) : (
+            <p className="ob-sel-desc">Select a section from the journey above.</p>
+          )}
         </div>
-        <span className="ob-progress-label">
-          {completedIds.size} of {sections.length || "–"} completed
-        </span>
+
+        {/* Main assessment panel */}
+        <div className={`ob-main-panel${allDone ? " ob-main-panel--ready" : ""}`}>
+          <div className="ob-main-header">
+            <div className="ob-main-trophy">
+              <Trophy size={20} />
+            </div>
+            <div>
+              <div className="ob-sel-eyebrow">Main Assessment</div>
+              <h3 className="ob-sel-title">Safeguarding assessment</h3>
+            </div>
+          </div>
+          {allDone ? (
+            <>
+              <p className="ob-sel-desc">All pre-assessments complete. You're ready to begin the main wellbeing &amp; safeguarding assessment.</p>
+              {quizStatus === null ? (
+                <div className="ob-spinner" style={{ width: 24, height: 24, borderWidth: 2 }} />
+              ) : quizStatus.has_history ? (
+                <button
+                  className="ob-sel-btn ob-sel-btn--purple"
+                  onClick={() => navigate(`/results/${quizStatus.attempt_id}`)}
+                >
+                  Safeguarding Dashboard →
+                </button>
+              ) : (
+                <button
+                  className="ob-sel-btn ob-sel-btn--purple"
+                  onClick={() => navigate("/instructions")}
+                >
+                  Begin Assessment →
+                </button>
+              )}
+            </>
+          ) : (
+            <>
+              <p className="ob-sel-desc">
+                The main assessment becomes available after all six questionnaires are completed.
+                This keeps the journey clear, structured and less overwhelming for learners.
+              </p>
+              <div className="ob-main-remaining">
+                {Math.max(0, sections.length - completedIds.size)} step{sections.length - completedIds.size !== 1 ? "s" : ""} remaining
+              </div>
+            </>
+          )}
+        </div>
       </div>
 
-      {/* CTA after all done */}
-      {allDone && (
-        <div className="ob-cta">
-          <p>You've completed all pre-assessments. Ready to begin the main wellbeing &amp; safeguarding assessment?</p>
-          {startError && <p className="ob-cta-error">{startError}</p>}
-          <button className="ob-begin-btn" onClick={handleBeginSafeguarding} disabled={starting}>
-            {starting ? "Starting…" : "Begin Safeguarding Assessment →"}
-          </button>
-        </div>
+      {/* ── Report Modal ── */}
+      {activeReport && (
+        <LearnerReportModal
+          sectionTitle={activeReport.sectionTitle}
+          data={activeReport.data}
+          onClose={() => setActiveReport(null)}
+        />
       )}
 
-      {/* ── Modal ── */}
+      {/* ── Quiz Modal ── */}
       {openSection && (
         <div className="ob-overlay" onClick={handleCloseModal}>
           <div className="ob-modal" onClick={(e) => e.stopPropagation()}>
 
-            {/* Header */}
             <div className="ob-modal-header">
               <div>
                 <span className="ob-modal-badge">
@@ -337,7 +455,6 @@ export default function OnboardingPage() {
               <button className="ob-close-btn" onClick={handleCloseModal}>✕</button>
             </div>
 
-            {/* Body */}
             <div className="ob-questions-area">
               {modalLoading && (
                 <div className="ob-loading">
@@ -345,11 +462,9 @@ export default function OnboardingPage() {
                   <p>Loading questions…</p>
                 </div>
               )}
-
               {modalError && (
                 <p style={{ color: "var(--kent-danger-text)", textAlign: "center" }}>{modalError}</p>
               )}
-
               {modalData && !modalLoading && (
                 <div className="ob-question-list">
                   {questionGroups.map((group) => (
@@ -383,7 +498,6 @@ export default function OnboardingPage() {
               )}
             </div>
 
-            {/* Footer */}
             {submitError && (
               <p style={{ color: "var(--kent-danger-text)", fontSize: 13, margin: "0 0 12px", textAlign: "right" }}>
                 {submitError}

@@ -16,7 +16,8 @@ from rest_framework.response import Response
 from .auth import create_login_token, get_record_from_request
 from .models import (
     LearnerInclusivenessQuestion,
-    LearnerInclusivenessQuizReportAnswer,
+    LearnerInclusivenessQuizResponse,
+    LearnerInclusivenessReport,
     MonitoringRecord,
     SafeguardingQuestion,
     SafeguardingWellbeingAutomation,
@@ -611,6 +612,19 @@ def instructions_view(request):
             },
         }
     )
+
+
+@api_view(["GET"])
+def quiz_status_view(request):
+    """Returns whether the learner has previous quiz history and their record id."""
+    record = get_record_from_request(request)
+    history = ensure_json_value(record.history_json, default=[])
+    if not isinstance(history, list):
+        history = []
+    return Response({
+        "has_history": len(history) > 0,
+        "attempt_id": record.id,
+    })
 
 
 @api_view(["POST"])
@@ -1327,31 +1341,35 @@ def onboarding_submit_view(request, section_id: str):
             "required": q.required,
         })
 
-    # ── Persist answers to DB ────────────────────────────────────────────
+    # ── Persist answers to DB (one row per learner, UPSERT) ──────────────
     report_id = uuid.uuid4()
-    snapshot_base = {
-        "learner_id": record.id,
-        "section_id": section_id,
-        "section_title": first.section_title,
-        "learner_name": record.learner_name or "",
-        "learner_email": record.learner_email or "",
-    }
-
     answered_rows = [r for r in answer_rows if r["selected_value"] is not None]
 
-    LearnerInclusivenessQuizReportAnswer.objects.create(
-        report_id=report_id,
-        question_id=None,
-        selected_value=0,
-        section_id=section_id,
-        section_title=first.section_title,
+    section_data = {
+        "section_title": first.section_title,
+        "submitted_at": timezone.now().isoformat(),
+        "answers": {
+            r["question_id"]: {
+                "value": r["selected_value"],
+                "label": r["selected_label"],
+                "question_text": r["question_text"],
+            }
+            for r in answered_rows
+        },
+    }
+
+    response_obj, _ = LearnerInclusivenessQuizResponse.objects.get_or_create(
         learner_id=record.id,
-        wellbeing_record_id=record.id,
-        answer_snapshot={
-            **snapshot_base,
-            "answers": answered_rows,
+        defaults={
+            "learner_name": record.learner_name or "",
+            "learner_email": record.learner_email or "",
+            "sections": {},
         },
     )
+    response_obj.sections[section_id] = section_data
+    response_obj.learner_name = record.learner_name or ""
+    response_obj.learner_email = record.learner_email or ""
+    response_obj.save(update_fields=["sections", "learner_name", "learner_email", "updated_at"])
 
     # ── Fire webhook ──────────────────────────────────────────────────────
     webhook_url = ONBOARDING_WEBHOOKS.get(section_id)
@@ -1378,6 +1396,80 @@ def onboarding_submit_view(request, section_id: str):
             logger.warning("Onboarding webhook failed for %s: %s", section_id, exc)
 
     return Response({"message": "Section submitted successfully.", "report_id": str(report_id)})
+
+
+@api_view(["GET"])
+def onboarding_progress_view(request):
+    record = get_record_from_request(request)
+    try:
+        resp = LearnerInclusivenessQuizResponse.objects.get(learner_id=record.id)
+        completed = list(resp.sections.keys())
+    except LearnerInclusivenessQuizResponse.DoesNotExist:
+        completed = []
+    return Response({"completed_sections": completed})
+
+
+# map section_id → model field name
+_SECTION_REPORT_FIELD = {
+    "technology_anxiety_digital_access": "technology_report",
+    "visual_hearing_accessibility":      "visual_hearing_report",
+    "dyslexia":                          "dyslexia_report",
+    "adhd":                              "adhd_report",
+    "social_anxiety":                    "social_anxiety_report",
+    "mood_learning_capacity":            "mood_report",
+}
+
+
+@api_view(["GET"])
+def onboarding_reports_view(request):
+    record = get_record_from_request(request)
+    try:
+        row = LearnerInclusivenessReport.objects.using("wsms").filter(learner_id=record.id).first()
+    except Exception as exc:
+        logger.warning("onboarding_reports_view error for learner %s: %s", record.id, exc)
+        return Response({"reports": {}})
+
+    if not row:
+        return Response({"reports": {}})
+
+    reports = {}
+    for section_id, field in _SECTION_REPORT_FIELD.items():
+        value = getattr(row, field, None)
+        if not value:
+            continue
+        if isinstance(value, str):
+            try:
+                value = json.loads(value)
+            except (ValueError, TypeError):
+                continue
+        reports[section_id] = value
+
+    # Inject stored answers from quiz response (saved in default DB by onboarding_submit_view)
+    try:
+        quiz_resp = LearnerInclusivenessQuizResponse.objects.get(learner_id=record.id)
+        sections_data = quiz_resp.sections if isinstance(quiz_resp.sections, dict) else {}
+    except LearnerInclusivenessQuizResponse.DoesNotExist:
+        sections_data = {}
+    except Exception as exc:
+        logger.warning("onboarding_reports_view answers fetch error for learner %s: %s", record.id, exc)
+        sections_data = {}
+
+    for section_id, report_data in reports.items():
+        raw_answers = sections_data.get(section_id, {}).get("answers", {})
+        if not raw_answers or not isinstance(report_data, dict):
+            continue
+        answers_list = [
+            {
+                "question_id": qid,
+                "value": ans.get("value"),
+                "label": ans.get("label"),
+                "question_text": ans.get("question_text", ""),
+            }
+            for qid, ans in raw_answers.items()
+        ]
+        report_data["answers"] = answers_list
+
+    return Response({"reports": reports})
 
 
 @api_view(["GET"])

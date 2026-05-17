@@ -131,31 +131,41 @@ class LearnerInclusivenessQuestion(models.Model):
         return f"{self.section_id} / {self.question_id}"
 
 
-class LearnerInclusivenessQuizReportAnswer(models.Model):
+class LearnerInclusivenessQuizResponse(models.Model):
     id = models.BigAutoField(primary_key=True)
-    report_id = models.UUIDField()
-    question_id = models.TextField(blank=True, null=True)
-    question_order = models.IntegerField(blank=True, null=True)
-    sub_section = models.TextField(blank=True, null=True)
-    question_text = models.TextField(blank=True, null=True)
-    selected_value = models.IntegerField()
-    selected_label = models.TextField(blank=True, null=True)
-    score_min = models.IntegerField(blank=True, null=True, default=0)
-    score_max = models.IntegerField(blank=True, null=True, default=3)
-    required = models.BooleanField(blank=True, null=True, default=True)
-    answer_snapshot = models.JSONField(default=dict)
-    created_at = models.DateTimeField(auto_now_add=True)
-    section_id = models.TextField(blank=True, null=True)
-    section_title = models.TextField(blank=True, null=True)
-    learner_id = models.BigIntegerField(blank=True, null=True)
-    wellbeing_record_id = models.BigIntegerField(blank=True, null=True)
+    learner_id = models.BigIntegerField(unique=True)
+    learner_name = models.TextField(blank=True, null=True)
+    learner_email = models.TextField(blank=True, null=True)
+    sections = models.JSONField(default=dict)
+    updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
         managed = False
-        db_table = "learner_inclusiveness_quiz_report_answers"
+        db_table = "learner_inclusiveness_quiz_responses"
 
     def __str__(self):
-        return f"{self.report_id} / {self.section_id} / {self.question_id}"
+        return f"learner={self.learner_id} / sections={list(self.sections.keys())}"
+
+
+class LearnerInclusivenessReport(models.Model):
+    id = models.BigAutoField(primary_key=True)
+    learner_id = models.BigIntegerField(unique=True)
+    learner_name = models.TextField(blank=True, null=True)
+    learner_email = models.TextField(blank=True, null=True)
+    technology_report = models.TextField(blank=True, null=True)
+    visual_hearing_report = models.TextField(blank=True, null=True)
+    dyslexia_report = models.TextField(blank=True, null=True)
+    adhd_report = models.TextField(blank=True, null=True)
+    social_anxiety_report = models.TextField(blank=True, null=True)
+    mood_report = models.TextField(blank=True, null=True, db_column="mood_learning_capacity_report")
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        managed = False
+        db_table = "learner_inclusiveness_reports"
+
+    def __str__(self):
+        return f"report learner={self.learner_id}"
 
 
 # tickets
