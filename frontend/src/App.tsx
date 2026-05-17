@@ -1,6 +1,7 @@
 import { Routes, Route } from "react-router-dom";
 import LoginPage from "./pages/LoginPage.tsx";
 import InstructionsPage from "./pages/InstructionsPage.tsx";
+import OnboardingPage from "./pages/OnboardingPage.tsx";
 import QuizPage from "./pages/QuizPage.tsx";
 import ThanksPage from "./pages/ThanksPage.tsx";
 import ResultPage from "./pages/ResultPage.tsx";
@@ -9,6 +10,7 @@ export default function App() {
   return (
     <Routes>
       <Route path="/" element={<LoginPage />} />
+      <Route path="/onboarding" element={<OnboardingPage />} />
       <Route path="/instructions" element={<InstructionsPage />} />
       <Route path="/quiz/:attemptId" element={<QuizPage />} />
       <Route path="/thanks/:attemptId" element={<ThanksPage />} />

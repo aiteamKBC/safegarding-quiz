@@ -15,6 +15,8 @@ from rest_framework.response import Response
 
 from .auth import create_login_token, get_record_from_request
 from .models import (
+    LearnerInclusivenessQuestion,
+    LearnerInclusivenessQuizReportAnswer,
     MonitoringRecord,
     SafeguardingQuestion,
     SafeguardingWellbeingAutomation,
@@ -579,7 +581,7 @@ def login_view(request):
             "has_completed_quiz": has_completed_quiz,
             "attempt_id": record.id,
             "next_route": (
-                f"/results/{record.id}" if has_completed_quiz else "/instructions"
+                f"/results/{record.id}" if has_completed_quiz else "/onboarding"
             ),
         }
     )
@@ -1270,3 +1272,186 @@ def upload_ticket_evidence_view(request, ticket_id: int):
         },
         status=status.HTTP_201_CREATED,
     )
+
+
+# ── Onboarding (Initial Inclusiveness Screening) ─────────────────────────────
+
+ONBOARDING_WEBHOOKS = {
+    "technology_anxiety_digital_access": "https://n8n.srv943390.hstgr.cloud/webhook/Technology_anxiety",
+    "visual_hearing_accessibility": "https://n8n.srv943390.hstgr.cloud/webhook/visual_and_hearing_impairments",
+    "dyslexia": "https://n8n.srv943390.hstgr.cloud/webhook/Dyslixia",
+    "adhd": "https://n8n.srv943390.hstgr.cloud/webhook/ADHD",
+    "social_anxiety": "https://n8n.srv943390.hstgr.cloud/webhook/Social_Anxiety",
+    "mood_learning_capacity": "https://n8n.srv943390.hstgr.cloud/webhook/Depression",
+}
+
+
+@api_view(["POST"])
+def onboarding_submit_view(request, section_id: str):
+    record = get_record_from_request(request)
+
+    raw_answers = request.data.get("answers", {})
+
+    questions = (
+        LearnerInclusivenessQuestion.objects
+        .filter(is_active=True, section_id=section_id)
+        .order_by("question_order")
+    )
+
+    if not questions.exists():
+        return Response(
+            {"detail": f"Section '{section_id}' not found."},
+            status=status.HTTP_404_NOT_FOUND,
+        )
+
+    first = questions.first()
+    answer_rows = []
+    for q in questions:
+        selected_value = raw_answers.get(str(q.id))
+        selected_label = None
+        if selected_value is not None:
+            for opt in (q.options or []):
+                if opt.get("value") == selected_value:
+                    selected_label = opt.get("label")
+                    break
+
+        answer_rows.append({
+            "question_id": q.question_id,
+            "question_order": q.question_order,
+            "sub_section": q.sub_section or "",
+            "question_text": q.question_text,
+            "selected_value": selected_value,
+            "selected_label": selected_label,
+            "score_min": q.score_min,
+            "score_max": q.score_max,
+            "required": q.required,
+        })
+
+    # ── Persist answers to DB ────────────────────────────────────────────
+    report_id = uuid.uuid4()
+    snapshot_base = {
+        "learner_id": record.id,
+        "section_id": section_id,
+        "section_title": first.section_title,
+        "learner_name": record.learner_name or "",
+        "learner_email": record.learner_email or "",
+    }
+
+    answered_rows = [r for r in answer_rows if r["selected_value"] is not None]
+
+    LearnerInclusivenessQuizReportAnswer.objects.create(
+        report_id=report_id,
+        question_id=None,
+        selected_value=0,
+        section_id=section_id,
+        section_title=first.section_title,
+        learner_id=record.id,
+        wellbeing_record_id=record.id,
+        answer_snapshot={
+            **snapshot_base,
+            "answers": answered_rows,
+        },
+    )
+
+    # ── Fire webhook ──────────────────────────────────────────────────────
+    webhook_url = ONBOARDING_WEBHOOKS.get(section_id)
+    if webhook_url:
+        payload = {
+            "report_id": str(report_id),
+            "learner_id": record.id,
+            "learner_name": record.learner_name or "",
+            "learner_email": record.learner_email or "",
+            "programme": record.programme or "",
+            "manager_name": record.manager_name or "",
+            "manager_email": record.manager_email or "",
+            "coach_name": record.coach_name or "",
+            "coach_email": record.coach_email or "",
+            "organization_name": record.organization_name or "",
+            "section_id": section_id,
+            "section_title": first.section_title,
+            "submitted_at": timezone.now().isoformat(),
+            "answers": answer_rows,
+        }
+        try:
+            requests.post(webhook_url, json=payload, timeout=10)
+        except Exception as exc:
+            logger.warning("Onboarding webhook failed for %s: %s", section_id, exc)
+
+    return Response({"message": "Section submitted successfully.", "report_id": str(report_id)})
+
+
+@api_view(["GET"])
+def onboarding_sections_view(request):
+    get_record_from_request(request)
+
+    rows = (
+        LearnerInclusivenessQuestion.objects
+        .filter(is_active=True)
+        .values("section_id", "section_title", "section_order")
+        .distinct()
+        .order_by("section_order")
+    )
+
+    seen = {}
+    for row in rows:
+        sid = row["section_id"]
+        if sid not in seen:
+            seen[sid] = {
+                "section_id": sid,
+                "section_title": row["section_title"],
+                "section_order": row["section_order"],
+            }
+
+    counts = (
+        LearnerInclusivenessQuestion.objects
+        .filter(is_active=True)
+        .values("section_id")
+        .annotate(question_count=models.Count("id"))
+    )
+    count_map = {r["section_id"]: r["question_count"] for r in counts}
+
+    sections = [
+        {**s, "question_count": count_map.get(sid, 0)}
+        for sid, s in seen.items()
+    ]
+
+    return Response({"sections": sections})
+
+
+@api_view(["GET"])
+def onboarding_questions_view(request, section_id: str):
+    get_record_from_request(request)
+
+    questions = (
+        LearnerInclusivenessQuestion.objects
+        .filter(is_active=True, section_id=section_id)
+        .order_by("question_order")
+    )
+
+    if not questions.exists():
+        return Response(
+            {"detail": f"Section '{section_id}' not found."},
+            status=status.HTTP_404_NOT_FOUND,
+        )
+
+    first = questions.first()
+    return Response({
+        "section_id": section_id,
+        "section_title": first.section_title,
+        "section_order": first.section_order,
+        "questions": [
+            {
+                "id": q.id,
+                "question_id": q.question_id,
+                "question_order": q.question_order,
+                "sub_section": q.sub_section or "",
+                "question_text": q.question_text,
+                "answer_type": q.answer_type,
+                "required": q.required,
+                "options": q.options or [],
+                "score_min": q.score_min,
+                "score_max": q.score_max,
+            }
+            for q in questions
+        ],
+    })

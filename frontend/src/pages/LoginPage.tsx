@@ -18,7 +18,7 @@ export default function LoginPage() {
       });
 
       setToken(data.token);
-      navigate(data.next_route || "/instructions");
+      navigate(data.next_route || "/onboarding");
     } catch (err) {
       const message = err instanceof Error ? err.message : "Login failed";
       setError(message);

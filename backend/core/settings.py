@@ -111,10 +111,19 @@ _DB_OPTIONS = {
     "CONN_MAX_AGE": 60,
 }
 
+def _parse_db(env_key: str) -> dict:
+    url = os.getenv(env_key, "").strip()
+    if not url:
+        raise RuntimeError(
+            f"Environment variable '{env_key}' is not set. "
+            "Create backend/.env and set all three DATABASE_URL* variables."
+        )
+    return {**dj_database_url.parse(url), **_DB_OPTIONS}
+
 DATABASES = {
-    "default": {**dj_database_url.parse(os.getenv("DATABASE_URL")), **_DB_OPTIONS},
-    "wsms": {**dj_database_url.parse(os.getenv("DATABASE_URL_WSMS")), **_DB_OPTIONS},
-    "automation": {**dj_database_url.parse(os.getenv("DATABASE_URL_automation")), **_DB_OPTIONS},
+    "default": _parse_db("DATABASE_URL"),
+    "wsms": _parse_db("DATABASE_URL_WSMS"),
+    "automation": _parse_db("DATABASE_URL_automation"),
 }
 
 

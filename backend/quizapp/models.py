@@ -97,6 +97,67 @@ class SafeguardingWellbeingAutomation(models.Model):
     def __str__(self):
         return f"Automation {self.id} / wellbeing_record_id={self.wellbeing_record_id}"
 
+class LearnerInclusivenessQuestion(models.Model):
+    id = models.BigAutoField(primary_key=True)
+    system_id = models.TextField(default="initial_inclusiveness_screening")
+    section_id = models.TextField()
+    section_title = models.TextField()
+    section_order = models.IntegerField()
+    question_id = models.TextField()
+    question_order = models.IntegerField()
+    sub_section = models.TextField(blank=True, null=True)
+    question_text = models.TextField()
+    answer_type = models.TextField(default="scale_0_to_3")
+    required = models.BooleanField(default=True)
+    options = models.JSONField(default=list)
+    score_min = models.IntegerField(default=0)
+    score_max = models.IntegerField(default=3)
+    reference_code = models.TextField(blank=True, null=True)
+    reference_type = models.TextField(blank=True, null=True)
+    academic_reference = models.TextField(blank=True, null=True)
+    professional_reference = models.TextField(blank=True, null=True)
+    reference_details = models.JSONField(blank=True, null=True)
+    is_active = models.BooleanField(default=True)
+    is_diagnostic = models.BooleanField(default=False)
+    created_at = models.DateTimeField(blank=True, null=True)
+    updated_at = models.DateTimeField(blank=True, null=True)
+
+    class Meta:
+        managed = False
+        db_table = "learner_inclusiveness_questions"
+        ordering = ["section_order", "question_order"]
+
+    def __str__(self):
+        return f"{self.section_id} / {self.question_id}"
+
+
+class LearnerInclusivenessQuizReportAnswer(models.Model):
+    id = models.BigAutoField(primary_key=True)
+    report_id = models.UUIDField()
+    question_id = models.TextField(blank=True, null=True)
+    question_order = models.IntegerField(blank=True, null=True)
+    sub_section = models.TextField(blank=True, null=True)
+    question_text = models.TextField(blank=True, null=True)
+    selected_value = models.IntegerField()
+    selected_label = models.TextField(blank=True, null=True)
+    score_min = models.IntegerField(blank=True, null=True, default=0)
+    score_max = models.IntegerField(blank=True, null=True, default=3)
+    required = models.BooleanField(blank=True, null=True, default=True)
+    answer_snapshot = models.JSONField(default=dict)
+    created_at = models.DateTimeField(auto_now_add=True)
+    section_id = models.TextField(blank=True, null=True)
+    section_title = models.TextField(blank=True, null=True)
+    learner_id = models.BigIntegerField(blank=True, null=True)
+    wellbeing_record_id = models.BigIntegerField(blank=True, null=True)
+
+    class Meta:
+        managed = False
+        db_table = "learner_inclusiveness_quiz_report_answers"
+
+    def __str__(self):
+        return f"{self.report_id} / {self.section_id} / {self.question_id}"
+
+
 # tickets
 class SupportTicket(models.Model):
     id = models.BigAutoField(primary_key=True)

@@ -3,7 +3,12 @@
     "allow": [
       "Bash(find \"c:\\\\\\\\Users\\\\\\\\Lenovo\\\\\\\\safegarding-quiz\\\\\\\\frontend\\\\\\\\src\" -type f -name \"*.tsx\" -o -name \"*.ts\" -o -name \"*.css\")",
       "Bash(.venvScriptspython.exe manage.py shell -c ' *)",
-      "Bash(.venv\\\\Scripts\\\\python.exe manage.py migrate)"
+      "Bash(.venv\\\\Scripts\\\\python.exe manage.py migrate)",
+      "PowerShell(cd \"c:\\\\Users\\\\Lenovo\\\\safegarding-quiz\\\\backend\"; $proc = Start-Process -FilePath \".\\\\.venv\\\\Scripts\\\\python.exe\" -ArgumentList \"manage.py runserver --noreload\" -RedirectStandardError \"err.txt\" -RedirectStandardOutput \"out.txt\" -PassThru -NoNewWindow; Start-Sleep -Seconds 4; Stop-Process -Id $proc.Id -Force -ErrorAction SilentlyContinue; Get-Content \"out.txt\" -ErrorAction SilentlyContinue; Get-Content \"err.txt\" -ErrorAction SilentlyContinue; Remove-Item \"out.txt\",\"err.txt\" -ErrorAction SilentlyContinue)",
+      "PowerShell(cd \"c:\\\\Users\\\\Lenovo\\\\safegarding-quiz\\\\frontend\"; npx tsc --noEmit 2>&1; echo \"EXIT: $LASTEXITCODE\")",
+      "PowerShell(cd \"c:\\\\Users\\\\Lenovo\\\\safegarding-quiz\\\\backend\"; $job = Start-Job -ScriptBlock { Set-Location \"c:\\\\Users\\\\Lenovo\\\\safegarding-quiz\\\\backend\"; & \".\\\\.venv\\\\Scripts\\\\python.exe\" \"manage.py\" \"runserver\" \"--noreload\" 2>&1 }; Start-Sleep -Seconds 5; $out = Receive-Job $job; Stop-Job $job; Remove-Job $job; $out | Select-Object -First 30)",
+      "PowerShell(cd \"c:\\\\Users\\\\Lenovo\\\\safegarding-quiz\\\\backend\"; Start-Process -FilePath \".\\\\.venv\\\\Scripts\\\\python.exe\" -ArgumentList @\\(\"manage.py\", \"runserver\", \"8000\", \"--noreload\"\\) -RedirectStandardOutput \"C:\\\\Temp\\\\dj_out.txt\" -RedirectStandardError \"C:\\\\Temp\\\\dj_err.txt\" -PassThru -NoNewWindow | ForEach-Object { Start-Sleep 5; Stop-Process -Id $_.Id -Force -ErrorAction SilentlyContinue }; Start-Sleep 1; Get-Content \"C:\\\\Temp\\\\dj_out.txt\" -ErrorAction SilentlyContinue; Write-Host \"---STDERR---\"; Get-Content \"C:\\\\Temp\\\\dj_err.txt\" -ErrorAction SilentlyContinue)",
+      "PowerShell(cd \"c:\\\\Users\\\\Lenovo\\\\safegarding-quiz\\\\frontend\"; npx tsc --noEmit 2>&1; echo \"TS exit: $LASTEXITCODE\")"
     ]
   }
 }
