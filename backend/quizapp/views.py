@@ -46,6 +46,27 @@ def normalize_text(value):
     return str(value).strip().lower()
 
 
+def scale_label_for_value(value) -> str:
+    """Map a 1-10 scale response to its verbal label."""
+    try:
+        v = int(value)
+    except (TypeError, ValueError):
+        return ""
+    if v == 1:
+        return "Never"
+    if v in (2, 3):
+        return "Rarely"
+    if v in (4, 5):
+        return "Sometimes"
+    if v in (6, 7):
+        return "Often"
+    if v in (8, 9):
+        return "Very often"
+    if v == 10:
+        return "Always / almost always"
+    return str(v)
+
+
 def ensure_json_value(value, default=None):
     if default is None:
         default = {}
@@ -581,9 +602,7 @@ def login_view(request):
             },
             "has_completed_quiz": has_completed_quiz,
             "attempt_id": record.id,
-            "next_route": (
-                f"/results/{record.id}" if has_completed_quiz else "/onboarding"
-            ),
+            "next_route": "/onboarding",
         }
     )
 
@@ -1322,12 +1341,7 @@ def onboarding_submit_view(request, section_id: str):
     answer_rows = []
     for q in questions:
         selected_value = raw_answers.get(str(q.id))
-        selected_label = None
-        if selected_value is not None:
-            for opt in (q.options or []):
-                if opt.get("value") == selected_value:
-                    selected_label = opt.get("label")
-                    break
+        selected_label = scale_label_for_value(selected_value) if selected_value is not None else None
 
         answer_rows.append({
             "question_id": q.question_id,

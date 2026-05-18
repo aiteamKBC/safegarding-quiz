@@ -8,7 +8,10 @@
       "PowerShell(cd \"c:\\\\Users\\\\Lenovo\\\\safegarding-quiz\\\\frontend\"; npx tsc --noEmit 2>&1; echo \"EXIT: $LASTEXITCODE\")",
       "PowerShell(cd \"c:\\\\Users\\\\Lenovo\\\\safegarding-quiz\\\\backend\"; $job = Start-Job -ScriptBlock { Set-Location \"c:\\\\Users\\\\Lenovo\\\\safegarding-quiz\\\\backend\"; & \".\\\\.venv\\\\Scripts\\\\python.exe\" \"manage.py\" \"runserver\" \"--noreload\" 2>&1 }; Start-Sleep -Seconds 5; $out = Receive-Job $job; Stop-Job $job; Remove-Job $job; $out | Select-Object -First 30)",
       "PowerShell(cd \"c:\\\\Users\\\\Lenovo\\\\safegarding-quiz\\\\backend\"; Start-Process -FilePath \".\\\\.venv\\\\Scripts\\\\python.exe\" -ArgumentList @\\(\"manage.py\", \"runserver\", \"8000\", \"--noreload\"\\) -RedirectStandardOutput \"C:\\\\Temp\\\\dj_out.txt\" -RedirectStandardError \"C:\\\\Temp\\\\dj_err.txt\" -PassThru -NoNewWindow | ForEach-Object { Start-Sleep 5; Stop-Process -Id $_.Id -Force -ErrorAction SilentlyContinue }; Start-Sleep 1; Get-Content \"C:\\\\Temp\\\\dj_out.txt\" -ErrorAction SilentlyContinue; Write-Host \"---STDERR---\"; Get-Content \"C:\\\\Temp\\\\dj_err.txt\" -ErrorAction SilentlyContinue)",
-      "PowerShell(cd \"c:\\\\Users\\\\Lenovo\\\\safegarding-quiz\\\\frontend\"; npx tsc --noEmit 2>&1; echo \"TS exit: $LASTEXITCODE\")"
+      "PowerShell(cd \"c:\\\\Users\\\\Lenovo\\\\safegarding-quiz\\\\frontend\"; npx tsc --noEmit 2>&1; echo \"TS exit: $LASTEXITCODE\")",
+      "Bash(Get-ChildItem -Path \"c:\\\\Users\\\\LENOVOO\\\\safegarding-quiz\\\\frontend\\\\src\" -Directory)",
+      "Bash(npm install *)",
+      "Bash(node -e \"require\\('./node_modules/lucide-react'\\)\")"
     ]
   }
 }

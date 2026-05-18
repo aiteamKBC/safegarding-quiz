@@ -40,6 +40,17 @@ type SectionQuestions = {
 type Answers = Record<number, number>;
 type SectionReport = FullSectionReport;
 
+// ── 1-10 scale definition ─────────────────────────────────────────────────────
+
+const SCALE_GROUPS = [
+  { hint: "Never",              values: [1]     },
+  { hint: "Rarely",             values: [2, 3]  },
+  { hint: "Sometimes",          values: [4, 5]  },
+  { hint: "Often",              values: [6, 7]  },
+  { hint: "Very often",         values: [8, 9]  },
+  { hint: "Always",             values: [10]    },
+] as const;
+
 // ── Section metadata ──────────────────────────────────────────────────────────
 
 const SECTION_ICONS = [Laptop, Headphones, PenLine, Sparkles, Mic, HeartPulse];
@@ -479,15 +490,22 @@ export default function OnboardingPage() {
                             {q.question_text}
                             {q.required && <span className="ob-required-dot" title="Required" />}
                           </p>
-                          <div className="ob-options-row">
-                            {q.options.map((opt) => (
-                              <button
-                                key={opt.value}
-                                className={`ob-option-btn ${answers[q.id] === opt.value ? "ob-option-selected" : ""}`}
-                                onClick={() => handleAnswer(q.id, opt.value)}
-                              >
-                                {opt.label}
-                              </button>
+                          <div className="ob-scale-row">
+                            {SCALE_GROUPS.map((group) => (
+                              <div key={group.hint} className="ob-scale-group">
+                                <span className="ob-scale-hint">{group.hint}</span>
+                                <div className="ob-scale-nums">
+                                  {group.values.map((v) => (
+                                    <button
+                                      key={v}
+                                      className={`ob-scale-btn${answers[q.id] === v ? " ob-scale-selected" : ""}`}
+                                      onClick={() => handleAnswer(q.id, v)}
+                                    >
+                                      {v}
+                                    </button>
+                                  ))}
+                                </div>
+                              </div>
                             ))}
                           </div>
                         </div>
