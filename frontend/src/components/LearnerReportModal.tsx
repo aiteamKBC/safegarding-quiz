@@ -16,7 +16,7 @@ export type FullSectionReport = {
   findings?: {
     mainIndicators?: string[];
     recommendedActions?: { owner?: string; action?: string; priority?: string; due?: string }[];
-    recommendedAdjustments?: string[];
+    recommendedAdjustments?: string[]; 
   };
   flags?: {
     specialistScreeningRequired?: boolean;
@@ -43,7 +43,7 @@ const DARK_PURPLE = "#241453";
 const DEEP_PURPLE = "#442F73";
 const MID_PURPLE  = "#a88cd9";
 const SOFT_PURPLE = "#f9f5ff";
-const LAVENDER    = "#FEF9FF";
+// const LAVENDER    = "#FEF9FF";
 const MUTED       = "#7a7070";
 
 // ─── risk styles ─────────────────────────────────────────────────────────────
