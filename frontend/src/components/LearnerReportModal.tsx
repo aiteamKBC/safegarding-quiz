@@ -464,10 +464,10 @@ export function LearnerReportModal({
                 <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
                   {answers.map((a, i) => {
                     const val    = a.value ?? 0;
-                    const maxVal = 3;
+                    const maxVal = 10;
                     const aPct   = Math.round((val / maxVal) * 100);
                     const rStyle = getRisk(
-                      val >= 3 ? "Very High" : val >= 2 ? "High" : val >= 1 ? "Medium" : "Low"
+                      val >= 8 ? "Very High" : val >= 6 ? "High" : val >= 3 ? "Medium" : "Low"
                     );
                     return (
                       <div key={i} style={{

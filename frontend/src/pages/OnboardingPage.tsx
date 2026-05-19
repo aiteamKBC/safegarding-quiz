@@ -4,7 +4,7 @@ import { apiFetch } from "../api";
 import { LearnerReportModal, type FullSectionReport } from "../components/LearnerReportModal";
 import {
   Laptop, Headphones, PenLine, Sparkles, Mic, HeartPulse,
-  Play, Eye, Lock, Trophy,
+  Play, Eye, Lock, Trophy, MoveUp,
 } from "lucide-react";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -132,12 +132,27 @@ export default function OnboardingPage() {
   const allDone = sections.length > 0 && completedIds.size === sections.length;
   const pct = sections.length ? Math.round((completedIds.size / sections.length) * 100) : 0;
 
-  // Auto-select the current step
+  // Default: last completed section → gives the learner their latest report.
+  // Falls back to the first uncompleted section if nothing is done yet.
   useEffect(() => {
-    if (firstUncompletedSection && !selectedSection) {
-      setSelectedSection(firstUncompletedSection);
-    }
-  }, [firstUncompletedSection]);
+    if (selectedSection || sections.length === 0) return;
+    const lastCompleted = [...sections].reverse().find((s) => completedIds.has(s.section_id));
+    setSelectedSection(lastCompleted ?? firstUncompletedSection ?? null);
+  }, [sections, completedIds]);
+
+  // Poll for reports while any completed section is still waiting for its AI report
+  useEffect(() => {
+    const pendingReports = [...completedIds].filter((id) => !reports[id]);
+    if (pendingReports.length === 0) return;
+
+    const timer = setInterval(() => {
+      apiFetch<{ reports: Record<string, SectionReport> }>("/onboarding/reports/")
+        .then((data) => setReports(data.reports))
+        .catch(() => {});
+    }, 10_000);
+
+    return () => clearInterval(timer);
+  }, [completedIds, reports]);
 
   // Fetch quiz history status once all sections are done
   useEffect(() => {
@@ -357,36 +372,78 @@ export default function OnboardingPage() {
 
         {/* Selected step panel */}
         <div className="ob-selected-panel">
-          {selectedSection ? (
-            <>
-              <div className="ob-sel-eyebrow">Selected Step</div>
-              <h3 className="ob-sel-title">{selectedSection.section_title}</h3>
-              <p className="ob-sel-desc">
-                {SECTION_DESCRIPTIONS[selectedSection.section_order ?? 1]}
-              </p>
-              <div className="ob-sel-footer">
-                {selState === "current" && (
-                  <button className="ob-sel-btn ob-sel-btn--purple" onClick={() => openQuizModal(selectedSection)}>
-                    <Play size={13} fill="white" /> Start questionnaire
-                  </button>
+          {selectedSection ? (() => {
+            const report = reports[selectedSection.section_id];
+            const risk   = report?.score?.riskLevel;
+            const score  = report?.score?.total;
+            const maxSc  = report?.score?.max ?? 10;
+            const pctSc  = maxSc > 0 && score != null ? Math.round((score / maxSc) * 100) : null;
+            const riskColors: Record<string, { bg: string; text: string }> = {
+              "Very High": { bg: "#fef2f2", text: "#dc2626" },
+              "High":      { bg: "#fff7ed", text: "#d97706" },
+              "Medium":    { bg: "#eff6ff", text: "#3b82f6" },
+              "Low":       { bg: "#f0fdf4", text: "#16a34a" },
+            };
+            const rc = risk ? (riskColors[risk] ?? riskColors["Low"]) : null;
+
+            return (
+              <>
+                <div className="ob-sel-eyebrow">Selected Step</div>
+                <h3 className="ob-sel-title">{selectedSection.section_title}</h3>
+                <p className="ob-sel-desc">
+                  {SECTION_DESCRIPTIONS[selectedSection.section_order ?? 1]}
+                </p>
+
+                {/* Report preview strip — only when report is ready */}
+                {selState === "completed" && report && (
+                  <div className="ob-sel-report-strip">
+                    {risk && rc && (
+                      <span className="ob-sel-risk-badge" style={{ background: rc.bg, color: rc.text }}>
+                        {risk} risk
+                      </span>
+                    )}
+                    {pctSc != null && (
+                      <div className="ob-sel-score-bar">
+                        <div className="ob-sel-score-fill" style={{ width: `${pctSc}%` }} />
+                      </div>
+                    )}
+                    {score != null && (
+                      <span className="ob-sel-score-label">{score}/{maxSc}</span>
+                    )}
+                  </div>
                 )}
-                {selState === "completed" && reports[selectedSection.section_id] && (
-                  <button
-                    className="ob-sel-btn ob-sel-btn--gold"
-                    onClick={() => setActiveReport({ sectionTitle: selectedSection.section_title, data: reports[selectedSection.section_id] })}
-                  >
-                    <Eye size={13} /> View Report
-                  </button>
-                )}
-                {selState === "completed" && !reports[selectedSection.section_id] && (
-                  <span className="ob-sel-done-chip">Completed ✓</span>
-                )}
-                {selState === "locked" && (
-                  <span className="ob-sel-locked-chip"><Lock size={12} /> Locked</span>
-                )}
-              </div>
-            </>
-          ) : (
+
+                <div className="ob-sel-footer">
+                  {selState === "current" && (
+                    <button className="ob-sel-btn ob-sel-btn--purple" onClick={() => openQuizModal(selectedSection)}>
+                      <Play size={13} fill="white" /> Start questionnaire
+                    </button>
+                  )}
+                  {selState === "completed" && report && (
+                    <button
+                      className="ob-sel-btn ob-sel-btn--gold"
+                      onClick={() => setActiveReport({ sectionTitle: selectedSection.section_title, data: report })}
+                    >
+                      <Eye size={13} /> View Full Report
+                    </button>
+                  )}
+                  {selState === "completed" && !report && (
+                    <span className="ob-sel-done-chip">
+                      <span className="ob-sel-done-spinner" /> Report generating…
+                    </span>
+                  )}
+                  {selState === "locked" && (
+                    <span className="ob-sel-locked-chip"><Lock size={12} /> Locked</span>
+                  )}
+                </div>
+
+                <div className="ob-sel-hint">
+                  <MoveUp size={11} />
+                  Select a card from the journey map to explore a different section
+                </div>
+              </>
+            );
+          })() : (
             <p className="ob-sel-desc">Select a section from the journey above.</p>
           )}
         </div>

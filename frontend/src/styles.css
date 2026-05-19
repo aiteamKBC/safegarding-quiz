@@ -3377,7 +3377,73 @@ button:disabled {
 }
 
 .ob-sel-done-chip   { background: var(--kent-success-bg); color: var(--kent-success-text); border: 1px solid var(--kent-success-border); }
+
+.ob-sel-hint {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px dashed var(--color-p-300);
+  font-size: 11px;
+  color: var(--color-p-800);
+  line-height: 1.4;
+}
 .ob-sel-locked-chip { background: var(--color-100); color: var(--color-600); border: 1px solid var(--color-300); }
+
+/* Report preview strip */
+.ob-sel-report-strip {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 10px 0 16px;
+}
+
+.ob-sel-risk-badge {
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  border-radius: 999px;
+  padding: 3px 10px;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.ob-sel-score-bar {
+  flex: 1;
+  height: 5px;
+  background: var(--color-200);
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.ob-sel-score-fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--color-14), var(--color-11));
+  border-radius: 999px;
+  transition: width 0.6s ease;
+}
+
+.ob-sel-score-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--color-700);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+/* Spinner inside "Report generating…" chip */
+.ob-sel-done-spinner {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border: 1.5px solid currentColor;
+  border-top-color: transparent;
+  border-radius: 50%;
+  animation: ob-spin 0.75s linear infinite;
+  opacity: 0.6;
+}
 
 .ob-main-remaining {
   display: inline-block;
@@ -3803,4 +3869,175 @@ button:disabled {
   color: var(--kent-muted);
   font-size: 15px;
   line-height: 1.7;
+}
+
+/* ════════════════════════════════════════════
+   RESPONSIVE — Tablet  (≤ 768px)
+   ════════════════════════════════════════════ */
+
+@media (max-width: 768px) {
+  /* Page padding */
+  .ob-page       { padding: 36px 16px 48px; }
+  .survey-page,
+  .dashboard-page { padding: 30px 16px; }
+  .student-page  { padding: 30px 16px; }
+
+  /* Headings */
+  .ob-title                      { font-size: 30px; }
+  .survey-title,
+  .dashboard-header h1           { font-size: 28px; }
+  .thank-card h1                 { font-size: 26px; }
+  .ob-modal-title                { font-size: 22px; }
+
+  /* Onboarding map gutters */
+  .ob-stats-row,
+  .ob-map-wrap,
+  .ob-bottom-row { padding-left: 12px; padding-right: 12px; }
+
+  /* Cards */
+  .card                        { padding: 22px 20px; }
+  .student-card                { padding: 24px 20px; }
+  .survey-question-card,
+  .dashboard-panel             { padding: 22px 18px; }
+  .ob-modal                    { padding: 28px 22px; }
+  .ob-selected-panel,
+  .ob-main-panel               { padding: 20px 22px; }
+
+  /* Dashboard grids (supplement 1100px rule above) */
+  .hero-grid,
+  .middle-grid,
+  .top-grid,
+  .insight-grid,
+  .bottom-grid { grid-template-columns: 1fr; }
+}
+
+/* ════════════════════════════════════════════
+   RESPONSIVE — Journey map scroll  (≤ 640px)
+   ════════════════════════════════════════════ */
+
+@media (max-width: 640px) {
+  /* Make the journey map horizontally scrollable so the
+     absolute-positioned cards remain legible */
+  .ob-map-wrap {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    padding: 0 0 16px;
+  }
+  .ob-journey-bg {
+    min-width: 640px;
+    /* aspect-ratio stays — container is forced to at least 640px wide  */
+  }
+}
+
+/* ════════════════════════════════════════════
+   RESPONSIVE — Mobile  (≤ 600px)
+   ════════════════════════════════════════════ */
+
+@media (max-width: 600px) {
+  /* Stack onboarding stat cards */
+  .ob-stat-card--count,
+  .ob-stat-card--bar { flex: 1 1 100%; }
+
+  /* Stack bottom panels */
+  .ob-bottom-row { flex-direction: column; }
+
+  /* Survey scale: slightly smaller circles */
+  .survey-scale-option span { width: 36px; height: 36px; }
+
+  /* Thank-you card header: stack on narrow screens */
+  .thank-card-top {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 10px;
+  }
+  .thank-card-actions { flex-wrap: wrap; gap: 8px; }
+
+  /* Referral modal (supplements 600px rule already in file) */
+  .referral-modal { padding: 18px; }
+}
+
+/* ════════════════════════════════════════════
+   RESPONSIVE — Small mobile  (≤ 480px)
+   ════════════════════════════════════════════ */
+
+@media (max-width: 480px) {
+  /* ── Page containers ── */
+  .page          { padding: 16px; }
+  .ob-page       { padding: 24px 12px 32px; }
+  .survey-page,
+  .dashboard-page { padding: 20px 12px; }
+  .student-page  { padding: 20px 12px; }
+
+  /* ── Typography ── */
+  .ob-title                 { font-size: 22px; }
+  .ob-subtitle              { font-size: 13px; }
+  .ob-sel-title             { font-size: 16px; }
+  .ob-modal-title           { font-size: 18px; }
+  .thank-card h1            { font-size: 20px; }
+  .survey-title,
+  .dashboard-header h1      { font-size: 20px; }
+  .survey-question-title    { font-size: 16px; }
+
+  /* ── Cards ── */
+  .card                     { padding: 18px 14px; }
+  .student-card             { padding: 18px 14px; }
+  .survey-question-card,
+  .dashboard-panel          { padding: 14px 12px; }
+  .ob-modal                 { padding: 18px 14px; border-radius: 16px; }
+  .ob-selected-panel,
+  .ob-main-panel            { padding: 16px 14px; }
+
+  /* ── Onboarding stats ── */
+  .ob-stats-row { padding-left: 8px; padding-right: 8px; gap: 8px; }
+  .ob-stat-big  { font-size: 28px; }
+
+  /* ── Modal footer: stack buttons (primary at bottom, thumb-zone) ── */
+  .ob-modal-footer {
+    flex-direction: column;
+    gap: 8px;
+  }
+  .ob-cancel-btn,
+  .ob-complete-btn {
+    width: 100%;
+    text-align: center;
+    justify-content: center;
+    margin: 0;
+  }
+
+  /* ── Survey 1-10 scale ── */
+  .survey-scale-option span  { width: 30px; height: 30px; font-size: 12px; }
+  .ob-scale-row  { gap: 3px; }
+  .ob-scale-group { gap: 3px; }
+  .ob-scale-nums { gap: 2px; }
+  .ob-scale-btn  { width: 26px; height: 26px; font-size: 10px; }
+  .ob-scale-hint { font-size: 8px; padding: 2px 3px; }
+
+  /* ── Survey footer nav: stack ── */
+  .survey-footer-nav {
+    flex-direction: column-reverse;
+    gap: 8px;
+  }
+  .survey-footer-nav button { width: 100%; margin: 0; }
+
+  /* ── Tooltip: clamp to viewport ── */
+  .tooltip-box {
+    width: calc(100vw - 40px);
+    right: -4px;
+  }
+
+  /* ── Thank-you card buttons ── */
+  .retake-btn, .announce-btn { flex: 1 1 auto; }
+
+  /* ── Support ticket actions ── */
+  .ticket-actions { flex-direction: column; }
+
+  /* ── Referral modal ── */
+  .referral-modal-header h2 { font-size: 16px; }
+
+  /* ── Onboarding bottom panels ── */
+  .ob-bottom-row { padding-left: 8px; padding-right: 8px; }
+
+  /* ── Selected-panel buttons ── */
+  .ob-sel-footer { flex-direction: column; align-items: stretch; gap: 8px; }
+  .ob-sel-btn    { width: 100%; justify-content: center; }
 }

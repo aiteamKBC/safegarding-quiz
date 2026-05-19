@@ -1350,8 +1350,9 @@ def onboarding_submit_view(request, section_id: str):
             "question_text": q.question_text,
             "selected_value": selected_value,
             "selected_label": selected_label,
-            "score_min": q.score_min,
-            "score_max": q.score_max,
+            "score_min": 1,
+            "score_max": 10,
+            "answer_type": "scale_1_to_10",
             "required": q.required,
         })
 
@@ -1437,51 +1438,52 @@ _SECTION_REPORT_FIELD = {
 @api_view(["GET"])
 def onboarding_reports_view(request):
     record = get_record_from_request(request)
+
+    # ── Load AI reports from wsms DB (single source of truth) ────────────
+    reports = {}
     try:
         row = LearnerInclusivenessReport.objects.using("wsms").filter(learner_id=record.id).first()
+        if row:
+            for section_id, field in _SECTION_REPORT_FIELD.items():
+                value = getattr(row, field, None)
+                if not value:
+                    continue
+                if isinstance(value, str):
+                    try:
+                        value = json.loads(value)
+                    except (ValueError, TypeError):
+                        continue
+                if isinstance(value, dict):
+                    reports[section_id] = value
     except Exception as exc:
         logger.warning("onboarding_reports_view error for learner %s: %s", record.id, exc)
-        return Response({"reports": {}})
 
-    if not row:
-        return Response({"reports": {}})
-
-    reports = {}
-    for section_id, field in _SECTION_REPORT_FIELD.items():
-        value = getattr(row, field, None)
-        if not value:
-            continue
-        if isinstance(value, str):
-            try:
-                value = json.loads(value)
-            except (ValueError, TypeError):
-                continue
-        reports[section_id] = value
-
-    # Inject stored answers from quiz response (saved in default DB by onboarding_submit_view)
+    # ── Inject answers from quiz response into each ready report ──────────
     try:
         quiz_resp = LearnerInclusivenessQuizResponse.objects.get(learner_id=record.id)
         sections_data = quiz_resp.sections if isinstance(quiz_resp.sections, dict) else {}
     except LearnerInclusivenessQuizResponse.DoesNotExist:
         sections_data = {}
     except Exception as exc:
-        logger.warning("onboarding_reports_view answers fetch error for learner %s: %s", record.id, exc)
+        logger.warning("onboarding_reports_view answers error for learner %s: %s", record.id, exc)
         sections_data = {}
 
     for section_id, report_data in reports.items():
         raw_answers = sections_data.get(section_id, {}).get("answers", {})
-        if not raw_answers or not isinstance(report_data, dict):
+        if not raw_answers:
             continue
-        answers_list = [
-            {
-                "question_id": qid,
-                "value": ans.get("value"),
-                "label": ans.get("label"),
-                "question_text": ans.get("question_text", ""),
-            }
-            for qid, ans in raw_answers.items()
-        ]
-        report_data["answers"] = answers_list
+        report_data["answers"] = sorted(
+            [
+                {
+                    "question_id": qid,
+                    "value": ans.get("value"),
+                    "label": ans.get("label"),
+                    "question_text": ans.get("question_text", ""),
+                }
+                for qid, ans in raw_answers.items()
+            ],
+            key=lambda x: x["question_id"],
+        )
 
     return Response({"reports": reports})
 
