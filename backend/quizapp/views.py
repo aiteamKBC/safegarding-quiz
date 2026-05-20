@@ -190,9 +190,7 @@ def normalize_answer(question: SafeguardingQuestion, raw_answer):
     except (TypeError, ValueError):
         return None
 
-    # is_reverse_scored=TRUE  → positive question  → keep score as-is
-    # is_reverse_scored=FALSE → negative question  → flip score
-    if not question.is_reverse_scored:
+    if question.is_reverse_scored:
         return question.min_score + question.max_score - raw_value
 
     return raw_value
@@ -208,13 +206,7 @@ def calculate_group_averages(answer_rows):
 
     for row in answer_rows:
         score_group = row.get("score_group")
-
-        if score_group == "safeguarding":
-            normalized_score = row.get("normalized_score")
-            if normalized_score is not None:
-                # Binary: normalized ≤ 8 = high risk (1), normalized 9-10 = low risk (10)
-                grouped["safeguarding"].append(1.0 if normalized_score <= 8 else 10.0)
-        elif score_group in grouped:
+        if score_group in grouped:
             normalized_score = row.get("normalized_score")
             if normalized_score is not None:
                 grouped[score_group].append(normalized_score)
@@ -223,10 +215,6 @@ def calculate_group_averages(answer_rows):
     for group_name, values in grouped.items():
         if not values:
             averages[group_name] = 0.0
-        elif group_name == "safeguarding":
-            # If any answer was 1-8 → whole safeguarding score = 1 (High risk, no medium)
-            # Only if ALL answers were 9-10 → score = 10 (Low risk)
-            averages[group_name] = 10.0 if all(v == 10.0 for v in values) else 1.0
         else:
             averages[group_name] = round(sum(values) / len(values), 2)
 
@@ -248,74 +236,99 @@ def classify_risk(overall_score):
     return "High"
 
 
+def _trigger_item(row, key):
+    return {
+        "question_code": key,
+        "question_text": row.get("question_text", ""),
+        "question_id": row.get("question_id"),
+        "trigger_note": row.get("trigger_note", ""),
+        "trigger_rule": row.get("trigger_rule", ""),
+        "raw_answer": row.get("raw_answer"),
+        "normalized_score": row.get("normalized_score"),
+        "is_reverse_scored": row.get("is_reverse_scored"),
+    }
+
+
+def _is_triggered(row):
+    """Return (triggered: bool, priority: str) using trigger_rule + normalized score."""
+    score = row.get("normalized_score")
+    if score is None:
+        return False, ""
+    rule = (row.get("trigger_rule") or "").lower()
+    priority = row.get("trigger_priority")
+
+    def resolved_priority(default):
+        return str(priority).lower() if priority else default
+
+    low_match = re.search(
+        r"(?:<=|≤|below|under|less than|low(?: score)?(?: of)?)\s*(\d+(?:\.\d+)?)",
+        rule,
+    )
+    if low_match and score <= float(low_match.group(1)):
+        if row.get("score_group") == "safeguarding":
+            return True, resolved_priority("high")
+        return True, resolved_priority("low")
+
+    high_match = re.search(
+        r"(?:>=|≥|above|over|greater than|high(?: score)?(?: of)?)\s*(\d+(?:\.\d+)?)",
+        rule,
+    )
+    if high_match:
+        threshold = float(high_match.group(1))
+        if row.get("is_reverse_scored"):
+            min_score = row.get("min_score", 1)
+            max_score = row.get("max_score", 10)
+            threshold = min_score + max_score - threshold
+            if score <= threshold:
+                return True, resolved_priority("high")
+        elif score >= threshold:
+            return True, resolved_priority("high")
+
+    if row.get("score_group") == "safeguarding":
+        if score <= 8:
+            return True, resolved_priority("high")
+    elif "low" in rule:
+        if score <= 4:
+            return True, resolved_priority("low")
+    elif "high" in rule and row.get("is_reverse_scored"):
+        if score <= 4:
+            return True, resolved_priority("high")
+    elif "high" in rule:
+        if score >= 7:
+            return True, resolved_priority("high")
+
+    return False, ""
+
+
 def detect_triggers(answer_rows, group_scores):
     high = []
     medium = []
     pattern = []
-
-    # Safeguarding questions: normalized ≤ 8 = high risk (trigger), normalized 9-10 = safe
-    # Uses normalized_score so is_reverse_scored is respected (negative questions are handled correctly)
     seen_keys = set()
-    for row in answer_rows:
-        if row.get("score_group") != "safeguarding":
-            continue
-        normalized = row.get("normalized_score")
-        if normalized is None:
-            continue
-        if normalized <= 8:
-            key = row.get("question_code") or f"safeguarding_{row.get('question_id', 'unknown')}"
-            if key not in seen_keys:
-                seen_keys.add(key)
-                high.append({
-                    "question_code": key,
-                    "question_text": row.get("question_text", ""),
-                    "question_id": row.get("question_id"),
-                    "trigger_note": row.get("trigger_note", ""),
-                    "normalized_score": normalized,
-                })
 
     for row in answer_rows:
-        code = row.get("question_code")
-        score = row.get("normalized_score")
-
-        if score is None:
+        if not row.get("is_trigger"):
             continue
+        triggered, _ = _is_triggered(row)
+        if not triggered:
+            continue
+        key = row.get("question_code") or f"q_{row.get('question_id', 'unknown')}"
+        if key in seen_keys:
+            continue
+        seen_keys.add(key)
+        item = _trigger_item(row, key)
+        if row.get("score_group") == "safeguarding":
+            high.append(item)
+        else:
+            medium.append(item)
 
-        if code in {
-            "i_feel_anxious_or_worried_most_of_the_time",
-            "i_struggle_to_control_my_worries",
-            "my_anxiety_affects_my_ability_to_focus_or_perform",
-        } and score <= 3:
-            if "anxiety_high" not in medium:
-                medium.append("anxiety_high")
-
-        if code == "i_feel_low_or_down" and score <= 3:
-            if "low_mood" not in medium:
-                medium.append("low_mood")
-
-        if code in {
-            "i_struggle_to_get_good_quality_sleep",
-            "i_feel_tired_or_exhausted_most_days",
-        } and score <= 3:
-            if "sleep_problems" not in medium:
-                medium.append("sleep_problems")
-
-        if code == "i_feel_lonely_or_isolated" and score <= 3:
-            if "loneliness" not in medium:
-                medium.append("loneliness")
-
-        if code == "i_am_considering_leaving_my_apprenticeship_programme" and score <= 4:
-            if "considering_leaving" not in medium:
-                medium.append("considering_leaving")
-
+    # Pattern triggers
     below_5_count = sum(
         1 for v in group_scores.values()
         if isinstance(v, (int, float)) and v < 5
     )
-
     if below_5_count >= 3:
         pattern.append("three_categories_below_5")
-
     if group_scores.get("protective", 0) < 5:
         pattern.append("protective_below_5")
 
@@ -708,8 +721,11 @@ def submit_quiz_view(request):
                 "scale_prompt": question.scale_prompt or "",
                 "raw_answer": raw_answer_int,
                 "normalized_score": normalized_score,
+                "min_score": question.min_score,
+                "max_score": question.max_score,
                 "is_reverse_scored": question.is_reverse_scored,
                 "is_trigger": question.is_trigger,
+                "trigger_rule": question.trigger_rule or "",
                 "trigger_key": question.trigger_key,
                 "trigger_priority": question.trigger_priority,
                 "trigger_note": question.trigger_note or "",
@@ -795,13 +811,20 @@ def submit_quiz_view(request):
         ticket_type = None
 
     if ticket_type:
-        high_qs = [
-            f"• {t.get('question_text', t.get('question_code', ''))} (score: {t.get('normalized_score', '')})"
-            for t in triggers["high"]
-        ]
-        medium_qs = [f"• {t}" for t in triggers["medium"]]
-        pattern_qs = [f"• {t}" for t in triggers["pattern"]]
-        triggered_lines = "\n".join(high_qs + medium_qs + pattern_qs)
+        triggered_lines = []
+        for row in answer_rows:
+            if not row.get("is_trigger"):
+                continue
+            triggered, priority = _is_triggered(row)
+            if not triggered:
+                continue
+            raw = row.get("raw_answer")
+            normalized = row.get("normalized_score")
+            text = row.get("question_text") or row.get("question_code") or ""
+            score_text = f"Answer: {raw}"
+            if normalized is not None and normalized != raw:
+                score_text += f", Risk Score: {normalized}"
+            triggered_lines.append(f"• {text} ({score_text}) [{priority}]")
 
         details = (
             f"Auto-generated ticket from wellbeing survey.\n\n"
@@ -812,20 +835,22 @@ def submit_quiz_view(request):
             f"Coach:         {record.coach_name or '—'}\n"
         )
         if triggered_lines:
-            details += f"\nTriggered Questions:\n{triggered_lines}"
+            details += "\nTriggered Questions:\n" + "\n".join(triggered_lines)
 
         try:
-            SupportTicket.objects.create(
+            SupportTicket.objects.get_or_create(
                 wellbeing_record_id=record.id,
-                ticket_type=ticket_type,
                 created_by="System",
-                full_name=record.learner_name or "",
-                email=record.learner_email or "",
-                subject=subject,
-                details=details,
-                urgency=risk_level.lower(),
-                preferred_contact="email",
-                status="New",
+                defaults={
+                    "ticket_type": ticket_type,
+                    "full_name": record.learner_name or "",
+                    "email": record.learner_email or "",
+                    "subject": subject,
+                    "details": details,
+                    "urgency": risk_level.lower(),
+                    "preferred_contact": "email",
+                    "status": "New",
+                },
             )
         except Exception:
             logger.exception(
