@@ -230,10 +230,10 @@ def calculate_overall_score(group_scores):
 
 def classify_risk(overall_score):
     if overall_score >= 8:
-        return "Low"
+        return "High"
     if overall_score >= 5:
         return "Medium"
-    return "High"
+    return "Low"
 
 
 def _trigger_item(row, key):
@@ -250,52 +250,42 @@ def _trigger_item(row, key):
 
 
 def _is_triggered(row):
-    """Return (triggered: bool, priority: str) using trigger_rule + normalized score."""
+    """Return (triggered: bool, priority: str).
+    normalized_score is the RISK score — high means more concern."""
     score = row.get("normalized_score")
     if score is None:
         return False, ""
     rule = (row.get("trigger_rule") or "").lower()
     priority = row.get("trigger_priority")
+    min_s = row.get("min_score", 1)
+    max_s = row.get("max_score", 10)
 
     def resolved_priority(default):
         return str(priority).lower() if priority else default
 
-    low_match = re.search(
-        r"(?:<=|≤|below|under|less than|low(?: score)?(?: of)?)\s*(\d+(?:\.\d+)?)",
-        rule,
-    )
-    if low_match and score <= float(low_match.group(1)):
-        if row.get("score_group") == "safeguarding":
-            return True, resolved_priority("high")
-        return True, resolved_priority("low")
-
+    # "score >= X" → trigger when risk score reaches threshold
     high_match = re.search(
         r"(?:>=|≥|above|over|greater than|high(?: score)?(?: of)?)\s*(\d+(?:\.\d+)?)",
         rule,
     )
-    if high_match:
-        threshold = float(high_match.group(1))
-        if row.get("is_reverse_scored"):
-            min_score = row.get("min_score", 1)
-            max_score = row.get("max_score", 10)
-            threshold = min_score + max_score - threshold
-            if score <= threshold:
-                return True, resolved_priority("high")
-        elif score >= threshold:
+    if high_match and score >= float(high_match.group(1)):
+        return True, resolved_priority("high")
+
+    # "low wellness <= X" → convert to risk: risk_threshold = max+min-X
+    low_match = re.search(
+        r"(?:<=|≤|below|under|less than|low(?: score)?(?: of)?)\s*(\d+(?:\.\d+)?)",
+        rule,
+    )
+    if low_match:
+        risk_threshold = max_s + min_s - float(low_match.group(1))
+        if score >= risk_threshold:
             return True, resolved_priority("high")
 
-    if row.get("score_group") == "safeguarding":
-        if score <= 8:
-            return True, resolved_priority("high")
-    elif "low" in rule:
-        if score <= 4:
-            return True, resolved_priority("low")
-    elif "high" in rule and row.get("is_reverse_scored"):
-        if score <= 4:
-            return True, resolved_priority("high")
-    elif "high" in rule:
-        if score >= 7:
-            return True, resolved_priority("high")
+    # Fallback based on risk score level — score takes authority
+    if score >= 8:
+        return True, "high"
+    elif score >= 5:
+        return True, "medium"
 
     return False, ""
 
@@ -309,7 +299,7 @@ def detect_triggers(answer_rows, group_scores):
     for row in answer_rows:
         if not row.get("is_trigger"):
             continue
-        triggered, _ = _is_triggered(row)
+        triggered, priority = _is_triggered(row)
         if not triggered:
             continue
         key = row.get("question_code") or f"q_{row.get('question_id', 'unknown')}"
@@ -317,20 +307,20 @@ def detect_triggers(answer_rows, group_scores):
             continue
         seen_keys.add(key)
         item = _trigger_item(row, key)
-        if row.get("score_group") == "safeguarding":
+        if priority == "high":
             high.append(item)
         else:
             medium.append(item)
 
-    # Pattern triggers
-    below_5_count = sum(
+    # Pattern triggers (high risk score = concerning)
+    above_5_count = sum(
         1 for v in group_scores.values()
-        if isinstance(v, (int, float)) and v < 5
+        if isinstance(v, (int, float)) and v >= 5
     )
-    if below_5_count >= 3:
-        pattern.append("three_categories_below_5")
-    if group_scores.get("protective", 0) < 5:
-        pattern.append("protective_below_5")
+    if above_5_count >= 3:
+        pattern.append("three_categories_above_5")
+    if group_scores.get("protective", 0) >= 5:
+        pattern.append("protective_above_5")
 
     return {
         "high": high,
@@ -819,12 +809,8 @@ def submit_quiz_view(request):
             if not triggered:
                 continue
             raw = row.get("raw_answer")
-            normalized = row.get("normalized_score")
             text = row.get("question_text") or row.get("question_code") or ""
-            score_text = f"Answer: {raw}"
-            if normalized is not None and normalized != raw:
-                score_text += f", Risk Score: {normalized}"
-            triggered_lines.append(f"• {text} ({score_text}) [{priority}]")
+            triggered_lines.append(f"• {text} (Score: {raw}) [{priority}]")
 
         details = (
             f"Auto-generated ticket from wellbeing survey.\n\n"
