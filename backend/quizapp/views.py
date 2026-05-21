@@ -824,18 +824,25 @@ def submit_quiz_view(request):
             details += "\nTriggered Questions:\n" + "\n".join(triggered_lines)
 
         try:
-            SupportTicket.objects.create(
+            from datetime import timedelta
+            recent_exists = SupportTicket.objects.filter(
                 wellbeing_record_id=record.id,
-                created_by="system",
-                ticket_type=ticket_type,
-                full_name=record.learner_name or "",
-                email=record.learner_email or "",
-                subject=subject,
-                details=details,
-                urgency=risk_level.lower(),
-                preferred_contact="email",
-                status="New",
-            )
+                created_by__iexact="system",
+                created_at__gte=timezone.now() - timedelta(minutes=2),
+            ).exists()
+            if not recent_exists:
+                SupportTicket.objects.create(
+                    wellbeing_record_id=record.id,
+                    created_by="system",
+                    ticket_type=ticket_type,
+                    full_name=record.learner_name or "",
+                    email=record.learner_email or "",
+                    subject=subject,
+                    details=details,
+                    urgency=risk_level.lower(),
+                    preferred_contact="email",
+                    status="New",
+                )
         except Exception:
             logger.exception(
                 "Failed to auto-create ticket for record %s", record.id
