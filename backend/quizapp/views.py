@@ -824,19 +824,17 @@ def submit_quiz_view(request):
             details += "\nTriggered Questions:\n" + "\n".join(triggered_lines)
 
         try:
-            SupportTicket.objects.get_or_create(
+            SupportTicket.objects.create(
                 wellbeing_record_id=record.id,
-                created_by="System",
-                defaults={
-                    "ticket_type": ticket_type,
-                    "full_name": record.learner_name or "",
-                    "email": record.learner_email or "",
-                    "subject": subject,
-                    "details": details,
-                    "urgency": risk_level.lower(),
-                    "preferred_contact": "email",
-                    "status": "New",
-                },
+                created_by="system",
+                ticket_type=ticket_type,
+                full_name=record.learner_name or "",
+                email=record.learner_email or "",
+                subject=subject,
+                details=details,
+                urgency=risk_level.lower(),
+                preferred_contact="email",
+                status="New",
             )
         except Exception:
             logger.exception(
