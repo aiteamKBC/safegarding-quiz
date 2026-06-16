@@ -93,6 +93,8 @@ const PATH_D =
 export default function OnboardingPage() {
   const navigate = useNavigate();
 
+  const learnerEmail = localStorage.getItem("learner_email") ?? "";
+
   const [sections, setSections] = useState<Section[]>([]);
   const [sectionsError, setSectionsError] = useState("");
   const [completedIds, setCompletedIds] = useState<Set<string>>(new Set());
@@ -490,6 +492,15 @@ export default function OnboardingPage() {
               <div className="ob-main-remaining">
                 {Math.max(0, sections.length - completedIds.size)} step{sections.length - completedIds.size !== 1 ? "s" : ""} remaining
               </div>
+              <a
+                className="ob-sel-btn ob-who-i-am-btn"
+                href={`https://who-i-am.kentbusinesscollege.net/?email=${encodeURIComponent(learnerEmail)}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                style={{ marginTop: 10, display: "inline-flex", textDecoration: "none" }}
+              >
+                Who I Am
+              </a>
             </>
           )}
         </div>

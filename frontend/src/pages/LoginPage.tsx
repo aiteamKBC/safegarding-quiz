@@ -18,6 +18,7 @@ export default function LoginPage() {
       });
 
       setToken(data.token);
+      localStorage.setItem("learner_email", data.learner?.email ?? email);
       navigate(data.next_route || "/onboarding");
     } catch (err) {
       const message = err instanceof Error ? err.message : "Login failed";

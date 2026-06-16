@@ -3458,6 +3458,22 @@ button:disabled {
   box-sizing: border-box;
 }
 
+.ob-who-i-am-btn {
+  background: var(--color-14);
+  color: #fff;
+  border-radius: 10px;
+  padding: 10px 18px;
+  font-size: 13px;
+  font-weight: 600;
+  width: 100%;
+  text-align: center;
+  box-sizing: border-box;
+  justify-content: center;
+  cursor: pointer;
+  border: none;
+}
+.ob-who-i-am-btn:hover { background: var(--color-15); opacity: 1; transform: translateY(-1px); }
+
 /* ── CTA fallback (kept for backward compat) ── */
 .ob-cta-error {
   color: var(--kent-danger-text) !important;
