@@ -1,4 +1,4 @@
-# Wellbeing & Safeguarding Questionner
+# Wellbeing & Safeguarding Questionnaire
 
 React + TypeScript frontend for a learner wellbeing and safeguarding assessment journey.
 
