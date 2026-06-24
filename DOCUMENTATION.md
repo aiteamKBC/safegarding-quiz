@@ -380,6 +380,29 @@ On submit, the form builds a structured plain-text `details` string and POSTs to
 
 ---
 
+### Onboarding Dashboard - Main Assessment Actions
+
+The Onboarding Dashboard in `frontend/src/pages/OnboardingPage.tsx` shows the learner's pre-assessment journey before the main safeguarding assessment.
+
+The **Who I Am** external action is always visible in the Main Assessment panel, regardless of onboarding progress:
+
+- Before all six onboarding questionnaires are complete, the panel shows the remaining step count next to the **Who I Am** button.
+- After all six questionnaires are complete, the panel shows the main assessment action (**Begin Assessment** or **Safeguarding Dashboard**) next to **Who I Am**.
+- The **Who I Am** link passes the learner email as a query parameter: `https://who-i-am.kentbusinesscollege.net/?email={learner_email}`
+
+Relevant CSS classes in `frontend/src/styles.css`:
+
+| Class | Purpose |
+|---|---|
+| `.ob-main-remaining` | Displays the remaining onboarding step count as a compact pill |
+| `.ob-who-i-am-btn` | Styles the Who I Am action as a secondary button |
+| `.ob-sel-btn--purple + .ob-who-i-am-btn` | Aligns Who I Am beside the primary assessment button |
+| `.ob-main-remaining + .ob-who-i-am-btn` | Aligns Who I Am beside the remaining-step pill |
+
+On small screens, both the remaining-step pill and the action buttons become full-width stacked controls.
+
+---
+
 ### Login Page — KBC Branding
 
 - KBC logo (`/kbc-logo.png`) is displayed centred above the login form using `.login-logo-wrap` / `.login-logo`
@@ -389,6 +412,11 @@ On submit, the form builds a structured plain-text `details` string and POSTs to
 ---
 
 ## 10. Changelog
+
+### v2.9 - Onboarding Action Updates (2026-06)
+- Updated the Onboarding Dashboard so **Who I Am** remains visible whether onboarding is incomplete or complete
+- Restyled Main Assessment panel actions so **Who I Am** aligns consistently beside either the remaining-step pill or the primary assessment button
+- Added responsive mobile handling for stacked onboarding action controls
 
 ### v2.8 — UI & Referral Form (2026-05)
 - Added **Safeguarding Referral Form** (7-part modal, KBC SR-001 structure) to Results page
