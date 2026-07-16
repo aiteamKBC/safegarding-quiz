@@ -150,6 +150,10 @@ DATABASES = {
     "automation": _parse_db("DATABASE_URL_automation"),
 }
 
+KBC_USERS_DATABASE_URL = os.getenv("KBC_USERS_DATABASE_URL", "").strip()
+if KBC_USERS_DATABASE_URL:
+    DATABASES["kbc_users"] = {**dj_database_url.parse(KBC_USERS_DATABASE_URL), **_DB_OPTIONS}
+
 
 # Password validation
 # https://docs.djangoproject.com/en/6.0/ref/settings/#auth-password-validators

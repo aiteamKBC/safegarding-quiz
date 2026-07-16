@@ -12,6 +12,7 @@ from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.core import signing
 from django.core.mail import EmailMessage, send_mail
+from django.db import connections
 from django.db import models
 from django.http import HttpResponse
 from django.utils import timezone
@@ -82,6 +83,52 @@ def get_or_create_admin_monitoring_record(admin: AdminAccount) -> MonitoringReco
         completed=False,
         trigger_count=0,
     )
+
+
+def external_kbc_user_exists(email: str) -> bool:
+    lookup = normalize_text(email)
+    if not lookup:
+        return False
+
+    aliases = ["kbc_users"] if "kbc_users" in connections else []
+    aliases.append("default")
+    user_tables = ("auth_user", "accounts_user")
+
+    for alias in aliases:
+        try:
+            connection = connections[alias]
+            table_names = connection.introspection.table_names()
+
+            for table_name in user_tables:
+                if table_name not in table_names:
+                    continue
+
+                with connection.cursor() as cursor:
+                    columns = {
+                        column.name
+                        for column in connection.introspection.get_table_description(
+                            cursor,
+                            table_name,
+                        )
+                    }
+                search_columns = [col for col in ("email", "username") if col in columns]
+                if not search_columns:
+                    continue
+
+                conditions = " OR ".join(f"LOWER({col}) = %s" for col in search_columns)
+                params = [lookup for _ in search_columns]
+                active_filter = " AND is_active = TRUE" if "is_active" in columns else ""
+                with connection.cursor() as cursor:
+                    cursor.execute(
+                        f"SELECT 1 FROM {table_name} WHERE ({conditions}){active_filter} LIMIT 1",
+                        params,
+                    )
+                    if cursor.fetchone():
+                        return True
+        except Exception as exc:
+            logger.warning("Could not check external user tables on %s for %s: %s", alias, lookup, exc)
+
+    return False
 
 
 def build_frontend_login_html(token, admin, record, next_route="/onboarding"):
@@ -824,7 +871,8 @@ def admin_microsoft_callback_view(request):
         django_user_exists = User.objects.filter(email__iexact=email, is_active=True).exists()
         if not django_user_exists:
             django_user_exists = User.objects.filter(username__iexact=email, is_active=True).exists()
-        if not django_user_exists:
+        kbc_user_exists = external_kbc_user_exists(email)
+        if not django_user_exists and not kbc_user_exists:
             return HttpResponse("This Microsoft account is not registered for admin access.", status=403)
 
         admin = AdminAccount(
