@@ -1,4 +1,28 @@
 from django.db import models
+from django.contrib.auth.hashers import check_password, make_password
+
+
+class AdminAccount(models.Model):
+    id = models.BigAutoField(primary_key=True)
+    email = models.EmailField(unique=True)
+    full_name = models.TextField(blank=True, null=True)
+    password_hash = models.TextField()
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "admin_accounts"
+        ordering = ["email"]
+
+    def set_password(self, raw_password):
+        self.password_hash = make_password(raw_password)
+
+    def check_password(self, raw_password):
+        return check_password(raw_password, self.password_hash)
+
+    def __str__(self):
+        return self.email
 
 
 class SafeguardingQuestion(models.Model):
@@ -137,6 +161,7 @@ class LearnerInclusivenessQuizResponse(models.Model):
     learner_name = models.TextField(blank=True, null=True)
     learner_email = models.TextField(blank=True, null=True)
     sections = models.JSONField(default=dict)
+    report_emailed_at = models.DateTimeField(blank=True, null=True)
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:

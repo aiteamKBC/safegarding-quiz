@@ -12,7 +12,6 @@ const DARK_PURPLE: RGB = [ 36,  20,  83];   // #241453
 const DEEP_PURPLE: RGB = [ 68,  47, 115];   // #442F73
 const MUTED: RGB       = [122, 112, 112];   // #7a7070
 const WHITE: RGB       = [255, 255, 255];
-const LIGHT: RGB       = [249, 244, 236];   // cream
 
 const riskColour = (level?: string): RGB => {
   if (level === "Very High") return [220, 38,  38];

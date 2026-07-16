@@ -1,4 +1,4 @@
-const API_BASE = "http://127.0.0.1:8000/api";
+export const API_BASE = "http://127.0.0.1:8000/api";
 
 export type Learner = {
   id: number;
@@ -12,6 +12,44 @@ export type LoginResponse = {
   learner: Learner;
   has_completed_quiz: boolean;
   attempt_id: number;
+  next_route: string;
+};
+
+export type AdminUser = {
+  id: number;
+  full_name: string;
+  email: string;
+  is_staff: boolean;
+};
+
+export type AdminLoginResponse = {
+  token: string;
+  admin: AdminUser;
+  learner: Learner;
+  next_route: string;
+};
+
+export type AdminMeResponse = {
+  admin: AdminUser;
+};
+
+export type AdminLearner = {
+  id: number;
+  full_name: string;
+  email: string;
+  programme: string;
+  coach_email: string;
+  manager_email: string;
+  completed: boolean;
+};
+
+export type AdminLearnersResponse = {
+  learners: AdminLearner[];
+};
+
+export type AdminLearnerTokenResponse = {
+  token: string;
+  learner: Learner;
   next_route: string;
 };
 
@@ -141,9 +179,9 @@ export type ResultResponse = {
 
 export type AutomationDashboardResponse = {
   attempt_id: number;
-  apprentice_dashboard: Record<string, any>;
-  follow_up_by_coach: Record<string, any>;
-  suggested_coach_actions: Record<string, any>;
+  apprentice_dashboard: Record<string, unknown>;
+  follow_up_by_coach: Record<string, unknown>;
+  suggested_coach_actions: Record<string, unknown>;
   created_at?: string | null;
   updated_at?: string | null;
   message?: string;
@@ -163,6 +201,18 @@ export function getToken(): string | null {
 
 export function clearToken(): void {
   localStorage.removeItem("quiz_token");
+}
+
+export function setAdminToken(token: string): void {
+  localStorage.setItem("admin_token", token);
+}
+
+export function getAdminToken(): string | null {
+  return localStorage.getItem("admin_token");
+}
+
+export function clearAdminToken(): void {
+  localStorage.removeItem("admin_token");
 }
 
 export async function apiFetch<T>(
@@ -217,6 +267,40 @@ export async function apiFetchForm<T>(path: string, formData: FormData): Promise
     if (response.status === 401 || response.status === 403) {
       clearToken();
       window.location.href = "/";
+    }
+    throw new Error(message);
+  }
+
+  return data as T;
+}
+
+export async function adminApiFetch<T>(
+  path: string,
+  options: RequestInit = {}
+): Promise<T> {
+  const token = getAdminToken();
+
+  const headers: HeadersInit = {
+    "Content-Type": "application/json",
+    ...(options.headers || {}),
+  };
+
+  if (token) {
+    (headers as Record<string, string>).Authorization = `Bearer ${token}`;
+  }
+
+  const response = await fetch(`${API_BASE}${path}`, {
+    ...options,
+    headers,
+  });
+
+  const data = await response.json();
+
+  if (!response.ok) {
+    const message: string = data.detail || data.message || "Something went wrong";
+    if (response.status === 401 || response.status === 403) {
+      clearAdminToken();
+      window.location.href = "/admin/login";
     }
     throw new Error(message);
   }

@@ -29,6 +29,30 @@ DEBUG = os.getenv("DEBUG", "False") == "True"
 ALLOWED_HOSTS = os.getenv("ALLOWED_HOSTS", "localhost,127.0.0.1").split(",")
 
 TASKS_API_KEY = os.getenv("TASKS_API_KEY", "")
+ADMIN_EMAIL_DOMAIN = os.getenv("ADMIN_EMAIL_DOMAIN", "kentbusinesscollege.com").strip().lower()
+FRONTEND_BASE_URL = os.getenv("FRONTEND_BASE_URL", "http://127.0.0.1:5173").strip().rstrip("/")
+ONBOARDING_REPORT_RECIPIENT = os.getenv(
+    "ONBOARDING_REPORT_RECIPIENT",
+    "Rewan.yasser@kentbusinesscollege.com",
+).strip()
+MS_GRAPH_TENANT_ID = os.getenv("MS_GRAPH_TENANT_ID", "").strip()
+MS_GRAPH_CLIENT_ID = os.getenv("MS_GRAPH_CLIENT_ID", "").strip()
+MS_GRAPH_CLIENT_SECRET = os.getenv("MS_GRAPH_CLIENT_SECRET", "").strip()
+MS_GRAPH_REFRESH_TOKEN = os.getenv("MS_GRAPH_REFRESH_TOKEN", "").strip()
+MS_GRAPH_SENDER_EMAIL = os.getenv("MS_GRAPH_SENDER_EMAIL", "").strip()
+MS_GRAPH_FROM_NAME = os.getenv("MS_GRAPH_FROM_NAME", "Kent Business College").strip()
+MS_TENANT_ID = os.getenv("MS_TENANT_ID", MS_GRAPH_TENANT_ID).strip()
+MS_CLIENT_ID = os.getenv("MS_CLIENT_ID", MS_GRAPH_CLIENT_ID).strip()
+MS_CLIENT_SECRET = os.getenv("MS_CLIENT_SECRET", "").strip()
+MS_REDIRECT_URI = os.getenv(
+    "MS_REDIRECT_URI",
+    "http://127.0.0.1:8000/api/admin/auth/microsoft/callback/",
+).strip()
+MS_ALLOWED_ORIGINS = [
+    origin.strip().rstrip("/")
+    for origin in os.getenv("MS_ALLOWED_ORIGINS", "http://127.0.0.1:5173,http://localhost:5173").split(",")
+    if origin.strip()
+]
 
 # weBHOOK_URL = os.getenv("WEBHOOK_URL", "")
 WELLBEING_AUTOMATION_WEBHOOK_URL = "https://n8n.srv943390.hstgr.cloud/webhook/wellbeing_safegarden"

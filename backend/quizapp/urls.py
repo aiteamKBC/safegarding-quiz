@@ -1,6 +1,16 @@
 from django.urls import path
 from .views import (
     login_view,
+    admin_login_view,
+    admin_microsoft_start_view,
+    admin_microsoft_callback_view,
+    admin_register_view,
+    admin_change_password_view,
+    admin_forgot_password_view,
+    admin_reset_password_view,
+    admin_me_view,
+    admin_learners_view,
+    admin_learner_token_view,
     instructions_view,
     quiz_status_view,
     start_quiz_view,
@@ -20,6 +30,16 @@ from .views import (
 
 urlpatterns = [
     path("auth/login/", login_view),
+    path("admin/auth/login/", admin_login_view),
+    path("admin/auth/microsoft/start/", admin_microsoft_start_view),
+    path("admin/auth/microsoft/callback/", admin_microsoft_callback_view),
+    path("admin/auth/register/", admin_register_view),
+    path("admin/auth/change-password/", admin_change_password_view),
+    path("admin/auth/forgot-password/", admin_forgot_password_view),
+    path("admin/auth/reset-password/", admin_reset_password_view),
+    path("admin/me/", admin_me_view),
+    path("admin/learners/", admin_learners_view),
+    path("admin/learners/<int:learner_id>/token/", admin_learner_token_view),
     path("quiz/instructions/", instructions_view),
     path("quiz/status/", quiz_status_view),
     path("quiz/start/", start_quiz_view),
